@@ -1,0 +1,816 @@
+/* ==========================================================================
+   PZHR SaaS Admin Workspace CSS - Premium Glassmorphism Theme
+   ========================================================================== */
+
+:root {
+  --bg-dark: #070b13;
+  --bg-sidebar: #090e19;
+  --panel-glass: rgba(15, 23, 42, 0.55);
+  --border-glass: rgba(255, 255, 255, 0.05);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --primary-accent: #38bdf8; /* cyan */
+  --green-accent: #10b981;  /* emerald */
+  --purple-accent: #a855f7; /* purple */
+  --yellow-accent: #eab308; /* amber */
+  --red-accent: #ef4444;    /* rose */
+}
+
+/* Base resets & layout */
+.workspace-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* ==========================================================================
+   Sidebar Panel
+   ========================================================================== */
+.workspace-sidebar {
+  width: 280px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-glass);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.5rem;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.brand-logo {
+  font-size: 2.25rem;
+}
+
+.sidebar-brand h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.sidebar-brand span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-grow: 1;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.menu-item span {
+  font-size: 1.1rem;
+}
+
+.menu-item:hover, .menu-item.active {
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--primary-accent);
+  border-left: 3px solid var(--primary-accent);
+}
+
+.sidebar-profile {
+  border-top: 1px solid var(--border-glass);
+  padding-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.profile-role {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.logout-button {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red-accent);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-button:hover {
+  background: var(--red-accent);
+  color: white;
+}
+
+/* ==========================================================================
+   Content & Header Area
+   ========================================================================== */
+.workspace-content {
+  flex-grow: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  overflow-y: auto;
+}
+
+.workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-glass);
+  padding-bottom: 1.25rem;
+}
+
+.workspace-header h2 {
+  font-size: 1.5rem;
+  margin: 0;
+  font-weight: 700;
+}
+
+.workspace-header p {
+  font-size: 0.8rem;
+  color: var(--primary-accent);
+  margin: 0.25rem 0 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.quick-search-input {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-glass);
+  color: white;
+  padding: 0.6rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  width: 250px;
+}
+
+.quick-search-input:focus {
+  border-color: var(--primary-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.search-action-btn {
+  background: var(--primary-accent);
+  color: var(--bg-dark);
+  border: none;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.search-action-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.tab-card-container {
+  background: var(--panel-glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: 1rem;
+  padding: 2rem;
+  min-height: 500px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================================================
+   Dashboard View
+   ========================================================================== */
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-glass);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.stat-card.border-blue::before { background: var(--primary-accent); }
+.stat-card.border-green::before { background: var(--green-accent); }
+.stat-card.border-purple::before { background: var(--purple-accent); }
+
+.stat-icon {
+  font-size: 1.75rem;
+}
+
+.stat-card h3 {
+  font-size: 2.25rem;
+  margin: 0;
+  font-weight: 700;
+}
+
+.stat-card label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.modules-nav-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.mod-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-glass);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mod-card:hover {
+  background: rgba(56, 189, 248, 0.05);
+  border-color: var(--primary-accent);
+  transform: translateY(-2px);
+}
+
+.mod-card h4 {
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+}
+
+.mod-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   Employee Master Directory
+   ========================================================================== */
+.directory-split {
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr;
+  gap: 2rem;
+}
+
+.employee-table-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--border-glass);
+  border-radius: 0.5rem;
+}
+
+.workspace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.workspace-table th {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.workspace-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.workspace-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.workspace-table tr.active td {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--primary-accent);
+}
+
+/* Form Styles */
+.profile-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid var(--border-glass);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-glass);
+  padding-bottom: 0.75rem;
+}
+
+.profile-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.badge {
+  background: var(--primary-accent);
+  color: var(--bg-dark);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-weight: 700;
+}
+
+.form-grid-col2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-group label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.form-group input, .form-group select {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.form-group input:focus {
+  border-color: var(--primary-accent);
+  outline: none;
+}
+
+.save-btn {
+  background: var(--green-accent);
+  color: var(--bg-dark);
+  border: none;
+  padding: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   GO 74 / 111 Module
+   ========================================================================== */
+.go-benefits-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.benefit-badge-card {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-glass);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 3px solid var(--yellow-accent);
+}
+
+.benefit-badge-card h5 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.card-detail {
+  font-size: 0.8rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.card-status {
+  font-size: 0.75rem;
+  color: var(--green-accent);
+  font-weight: 600;
+}
+
+.fixation-simulation-panel {
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid var(--border-glass);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.scale-select-field {
+  background: var(--bg-dark);
+  border: 1px solid var(--border-glass);
+  color: white;
+  padding: 0.6rem;
+  border-radius: 0.375rem;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Annual Increment Anniversary
+   ========================================================================== */
+.deductions-box-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.audit-item {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-glass);
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.audit-item span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.audit-item strong {
+  font-size: 1.25rem;
+}
+
+.audit-item.highlight {
+  border-color: var(--red-accent);
+  color: var(--red-accent);
+}
+
+.simulate-increment-btn {
+  background: var(--purple-accent);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.simulate-increment-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* ==========================================================================
+   Seniority Lists
+   ========================================================================== */
+.seniority-controls p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.seniority-card {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-glass);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.seniority-card h4 {
+  margin: 0;
+}
+
+.seniority-card span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.run-roster-btn {
+  background: var(--primary-accent);
+  color: var(--bg-dark);
+  border: none;
+  padding: 0.6rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+/* ==========================================================================
+   Leave Records
+   ========================================================================== */
+.leave-split-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr;
+  gap: 2rem;
+}
+
+.add-leave-card {
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid var(--border-glass);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.logs-scroll-box {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-glass);
+  border-radius: 0.5rem;
+}
+
+/* ==========================================================================
+   Retirement Claims Modeler
+   ========================================================================== */
+.claims-results-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.claim-item-result {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-glass);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-left: 4px solid var(--primary-accent);
+}
+
+.claim-item-result h4 {
+  margin: 0;
+  color: var(--primary-accent);
+}
+
+.claim-item-result p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.claim-item-result h3 {
+  margin: 1rem 0 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.warning-note {
+  font-size: 0.65rem;
+  color: var(--red-accent);
+}
+
+.total-package-card {
+  grid-column: span 3;
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  padding: 2rem;
+  border-radius: 0.75rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.total-package-card h3 {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.total-package-card h2 {
+  margin: 0;
+  font-size: 2.5rem;
+  color: var(--green-accent);
+}
+
+.download-docx-order-btn {
+  background: var(--green-accent);
+  color: var(--bg-dark);
+  border: none;
+  padding: 0.8rem 2rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+/* ==========================================================================
+   Alerts & Utilities
+   ========================================================================== */
+.alert-success-small {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--green-accent);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.alert-error-small {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--red-accent);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.select-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.inputs-row {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.pay-scales-table-box {
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--border-glass);
+  border-radius: 0.5rem;
+}
+
+/* Micro-animations */
+.animate-fade {
+  animation: fadeIn 0.35s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sub Tabs Navigation */
+.sub-tabs-nav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-glass);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sub-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sub-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: white;
+}
+
+.sub-tab-btn.active {
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--primary-accent);
+}
+
+/* Mini Logs layout for Career updates */
+.mini-log-scroll {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border-glass);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  max-height: 140px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mini-log-item {
+  background: rgba(255, 255, 255, 0.01);
+  padding: 0.4rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.75rem;
+}
+
+.mini-log-item strong {
+  color: var(--text-primary);
+}
+
+.mini-log-item span {
+  color: var(--text-secondary);
+}
+
+/* Force readable option dropdown text */
+select, select option {
+  background-color: #0f172a !important; /* solid dark slate slate */
+  color: #f1f5f9 !important;            /* readable off-white */
+}
+
+select:focus {
+  border-color: var(--primary-accent) !important;
+  outline: none;
+}

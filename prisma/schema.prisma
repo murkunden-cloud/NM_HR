@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  username      String  @id
+  password_hash String
+  full_name     String?
+  role          String
+  circl         String?
+  divnm         String?
+  permissions   String? // JSON string array of page navigations
+}
+
+model Location {
+  loccode   String  @id
+  locnm     String?
+
+  @@map("locations")
+}
+
+model PayScale {
+  scaleno     String  @id
+  payscl      String?
+  stage1      Float   @default(0)
+  incri1      Float   @default(0)
+  stage2      Float   @default(0)
+  incri2      Float   @default(0)
+  stage3      Float   @default(0)
+  incri3      Float   @default(0)
+  stage4      Float   @default(0)
+  incri4      Float   @default(0)
+  category    String?
+  circular_no String?
+  is_current  Int     @default(0)
+
+  @@map("pay_scales")
+}
+
+model Designation {
+  dez_id    String  @id
+  desigz    String?
+  paygrp    String?
+  paysclno  String?
+  payscl    String?
+  paysclno1 String?
+  payscl1   String?
+  types     String?
+  cat       String?
+  seniority String?
+
+  @@map("designations")
+}
+
+model Post {
+  dez_id    String  @id
+  desigz    String?
+  paygrp    String?
+  paysclno  String?
+  payscl    String?
+  cat       String?
+  types     String?
+  seniority String?
+
+  @@map("posts")
+}
+
+model Employee {
+  empno                String             @id
+  loccode              String?
+  empnm                String?
+  desigz               String?
+  locnm                String?
+  corp                 String?
+  regionm              String?
+  zonenm               String?
+  circl                String?
+  divnm                String?
+  subdnm               String?
+  sectionm             String?
+  substnm              String?
+  paygrp               String?
+  cader                String?
+  gender               String?
+  types                String?
+  compjoindt           String?
+  brthdt               String?
+  dtofretir            String?
+  cast                 String?
+  subcast              String?
+  validity             String?
+  valdtno              String?
+  valddt               String?
+  ppljoindt            String?
+  panno                String?
+  basic                Float              @default(0)
+  bankno               String?
+  payscl               String?
+  banknm               String?
+  qtrtype              String?
+  dtofincri            String?
+  mobileno             String?
+  educ                 String?
+  email                String?
+  
+  // GO 74 dates and fixation results
+  istgodt              String?
+  ist_go_scale         String?
+  ist_go_pay           Float              @default(0)
+  iindgodt             String?
+  iind_go_scale        String?
+  iind_go_pay          Float              @default(0)
+  iiirdgodt            String?
+  iiird_go_scale       String?
+  iiird_go_pay         Float              @default(0)
+  
+  // Transfer details
+  transdt              String?
+  transfer_type        String?
+  
+  // Rejoin tracking
+  is_rejoined          Int                @default(0)
+  rejoindt             String?
+  rejoin_mode          String?
+  original_compjoindt  String?
+  
+  // Audit
+  updated_by           String?
+  updated_dt           String?
+  
+  // SR 32 / Officiating details (10 columns)
+  suspension_days      Int                @default(0)
+  exleave_nopay_days   Int                @default(0)
+  exleave_counted      Int                @default(0)
+  exleave_reason       String?
+  officiating_post     String?
+  officiating_from     String?
+  increment_stoppages  Int                @default(0)
+  last_increment_dt    String?
+  next_increment_dt    String?
+  increment_note       String?
+  
+  // New fields
+  aadhaarno            String?
+  gpfno                String?
+  spousenm             String?
+  caste_category       String?
+  caste_validity_status String?
+  caste_validity_no    String?
+  caste_validity_dt    String?
+  deem_date_prom       String?
+  address              String?
+  stay_details         String?
+  prom_refused_dt      String?
+  prom_refused_reason  String?
+  prom_refused_note    String?
+  
+  // Additional Service Details
+  first_appointment_dt String?
+  reappointment_dt     String?
+  reappointment_type   String?
+  absorption_dt        String?
+  epicno               String?
+
+  // Relations
+  seniorityOverrides SeniorityOverride[]
+
+  @@map("employees")
+}
+
+model PromotionHistory {
+  id          Int      @id @default(autoincrement())
+  empno       String
+  prom_date   String?
+  from_desig  String?
+  to_desig    String?
+  from_scale  String?
+  to_scale    String?
+  pay_before  Float    @default(0)
+  pay_after   Float    @default(0)
+  prom_type   String?
+  remarks     String?
+  created_dt  String?
+
+  @@map("promotion_history")
+}
+
+model TransferHistory {
+  id            Int      @id @default(autoincrement())
+  empno         String
+  transfer_date String?
+  from_date     String?
+  to_date       String?
+  from_location String?
+  from_loccode  String?
+  to_location   String?
+  to_loccode    String?
+  from_desig    String?
+  to_desig      String?
+  transfer_type String?
+  promotion_no  Int      @default(0)
+  order_no      String?
+  remarks       String?
+  created_dt    String?
+
+  @@map("transfer_history")
+}
+
+model AppSettings {
+  key   String @id
+  value String
+
+  @@map("app_settings")
+}
+
+model SeniorityOverride {
+  empno        String
+  designation  String
+  seniority_no Int
+  remarks      String?
+  updated_by   String?
+  updated_dt   String?
+  employee     Employee? @relation(fields: [empno], references: [empno], onDelete: Cascade)
+
+  @@id([empno, designation])
+  @@index([empno, designation])
+  @@map("seniority_override")
+}
+
+model LeaveRecord {
+  id             Int      @id @default(autoincrement())
+  empno          String
+  leave_type     String
+  from_dt        String
+  to_dt          String
+  days           Float
+  sanction_order String?
+  remarks        String?
+  created_dt     String?
+
+  @@map("leave_records")
+}

@@ -1,0 +1,4 @@
+2026-07-01 20:38:41 - Starting C:\Program Files\nodejs\node.exe  --max-old-space-size=4096 D:\MYPRO\pzhr_web\node_modules\node-windows\lib\wrapper.js --file D:\MYPRO\pzhr_web\server.js --scriptoptions= --log "PZHR Web Application wrapper" --grow 0.25 --wait 1 --maxrestarts 3 --abortonerror n --stopparentfirst undefined
+2026-07-01 20:38:41 - Started 27892
+2026-07-02 20:49:09 - Starting C:\Program Files\nodejs\node.exe  --max-old-space-size=4096 D:\MYPRO\pzhr_web\node_modules\node-windows\lib\wrapper.js --file D:\MYPRO\pzhr_web\server.js --scriptoptions= --log "PZHR Web Application wrapper" --grow 0.25 --wait 1 --maxrestarts 3 --abortonerror n --stopparentfirst undefined
+2026-07-02 20:49:09 - Started 5764

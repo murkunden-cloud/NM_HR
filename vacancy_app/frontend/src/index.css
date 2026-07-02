@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+
+:root {
+  --bg-base: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-surface-2: #F1F5F9;
+  --text-primary: #0A1628;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --brand: #1E3A8A;
+  --brand-2: #1E40AF;
+  --brand-light: #3B82F6;
+  --accent-orange: #EA580C;
+  --accent-emerald: #059669;
+  --accent-rose: #DC2626;
+  --accent-amber: #D97706;
+  --accent-sky: #0284C7;
+  --border: #CBD5E1;
+}
+
+html, body, #root {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: 16px;
+  min-height: 100%;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+.font-display { font-family: 'Plus Jakarta Sans', sans-serif; letter-spacing: -0.025em; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+.font-heading { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+
+@layer base {
+  :root {
+    --background: 220 25% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 243 75% 59%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 350 89% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 243 75% 59%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { background: var(--bg-base); color: var(--text-primary); }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+.kpi-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  transition: all .2s ease;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+
+.kpi-indigo { background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border-color: #BFDBFE; }
+.kpi-emerald { background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); border-color: #A7F3D0; }
+.kpi-rose { background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%); border-color: #FECACA; }
+.kpi-amber { background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border-color: #FDE68A; }
+.kpi-sky { background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%); border-color: #BAE6FD; }
+.kpi-orange { background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%); border-color: #FED7AA; }
+
+.brand-gradient { background: linear-gradient(135deg, #1E3A8A 0%, #1E40AF 100%); }
+.btn-primary {
+  background: linear-gradient(135deg, #1E3A8A 0%, #1E40AF 100%);
+  color: white;
+  border-radius: 8px;
+  font-weight: 700;
+  transition: all .2s ease;
+  box-shadow: 0 2px 8px rgba(30, 58, 138, 0.2);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3); }
+
+.surface-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.tab-pill {
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 14px;
+}
