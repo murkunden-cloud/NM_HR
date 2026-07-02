@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 
-export async function PUT(request: Request, { params }: { params: { username: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ username: string }> }) {
   try {
     const { username } = await params;
     const body = await request.json();
@@ -28,7 +28,7 @@ export async function PUT(request: Request, { params }: { params: { username: st
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { username: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ username: string }> }) {
   try {
     const { username } = await params;
     await prisma.user.delete({
