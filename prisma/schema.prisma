@@ -247,3 +247,17 @@ model LeaveRecord {
 
   @@map("leave_records")
 }
+
+
+model SanctionedPost {
+  id           Int      @id @default(autoincrement())
+  circle       String
+  division     String?
+  designation  String
+  sanctionType String
+  caste        String
+  count        Int      @default(0)
+
+  @@unique([circle, division, designation, sanctionType, caste])
+  @@map("sanctioned_posts")
+}

@@ -274,7 +274,7 @@ export default function Vacancy() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-slate-900">
       {/* Welcome banner */}
       <div className="relative overflow-hidden rounded-2xl p-8 text-white"
            style={{ background: "linear-gradient(135deg, #1E3A8A 0%, #1E40AF 50%, #2563EB 100%)" }}>
@@ -339,10 +339,10 @@ export default function Vacancy() {
             <div key={key}>
               <Label className="text-sm font-semibold text-slate-700">{label}</Label>
               <Select value={f[key]} onValueChange={(v) => setF(s => ({ ...s, [key]: v }))}>
-                <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 h-11 text-base" data-testid={`filter-${key}`}>
+                <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 h-11 text-base text-slate-900" data-testid={`filter-${key}`}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-white max-h-[300px]">
+                <SelectContent className="bg-white text-slate-900 max-h-[300px]">
                   <SelectItem value="All">All</SelectItem>
                   {list.map(x => (
                     <SelectItem key={x} value={x}>{key === "paygroup" ? (PAYGROUP_LABEL[x] || x) : x}</SelectItem>
@@ -353,10 +353,10 @@ export default function Vacancy() {
           ))}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <Button onClick={onSearch} className="btn-primary h-11 text-base px-6 font-bold" data-testid="search-btn">
+          <Button onClick={onSearch} className="bg-blue-700 hover:bg-blue-800 text-white h-11 text-base px-6 font-bold shadow-md" data-testid="search-btn">
             <Search className="w-4 h-4 mr-2" /> Search
           </Button>
-          <Button onClick={onClear} variant="outline" className="h-11 text-base border-slate-300 font-semibold">Clear</Button>
+          <Button onClick={onClear} variant="outline" className="h-11 text-base border-slate-300 font-semibold text-slate-700 hover:bg-slate-100">Clear</Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-sm font-bold text-slate-700">Show:</span>
             {[
@@ -376,17 +376,17 @@ export default function Vacancy() {
       </div>
 
       <Tabs defaultValue="ledger" className="w-full">
-        <TabsList className="bg-white border border-slate-200 p-1.5 rounded-xl h-auto">
-          <TabsTrigger value="ledger" className="tab-pill data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 font-bold" data-testid="tab-ledger">
+        <TabsList className="bg-white text-slate-900 border border-slate-200 p-1.5 rounded-xl h-auto">
+          <TabsTrigger value="ledger" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 font-bold" data-testid="tab-ledger">
             <Layers className="w-4 h-4 mr-2" /> Location Ledger
           </TabsTrigger>
-          <TabsTrigger value="pool" className="tab-pill data-[state=active]:bg-sky-100 data-[state=active]:text-sky-800 font-bold" data-testid="tab-pool">
+          <TabsTrigger value="pool" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-sky-100 data-[state=active]:text-sky-800 font-bold" data-testid="tab-pool">
             <ArrowDownToLine className="w-4 h-4 mr-2" /> Zone Pool IN ({pool.length})
           </TabsTrigger>
-          <TabsTrigger value="out" className="tab-pill data-[state=active]:bg-rose-100 data-[state=active]:text-rose-800 font-bold" data-testid="tab-out">
+          <TabsTrigger value="out" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-rose-100 data-[state=active]:text-rose-800 font-bold" data-testid="tab-out">
             <ArrowUpFromLine className="w-4 h-4 mr-2" /> Out of Zone
           </TabsTrigger>
-          <TabsTrigger value="unmatched" className="tab-pill data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800 font-bold" data-testid="tab-unmatched">
+          <TabsTrigger value="unmatched" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800 font-bold" data-testid="tab-unmatched">
             <AlertTriangle className="w-4 h-4 mr-2 text-amber-600" /> Unmatched Locations ({Array.isArray(unmatchedLocs) ? unmatchedLocs.length : 0})
           </TabsTrigger>
         </TabsList>

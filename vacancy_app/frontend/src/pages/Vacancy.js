@@ -377,16 +377,16 @@ export default function Vacancy() {
 
       <Tabs defaultValue="ledger" className="w-full">
         <TabsList className="bg-white border border-slate-200 p-1.5 rounded-xl h-auto">
-          <TabsTrigger value="ledger" className="tab-pill data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 font-bold" data-testid="tab-ledger">
+          <TabsTrigger value="ledger" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 font-bold" data-testid="tab-ledger">
             <Layers className="w-4 h-4 mr-2" /> Location Ledger
           </TabsTrigger>
-          <TabsTrigger value="pool" className="tab-pill data-[state=active]:bg-sky-100 data-[state=active]:text-sky-800 font-bold" data-testid="tab-pool">
+          <TabsTrigger value="pool" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-sky-100 data-[state=active]:text-sky-800 font-bold" data-testid="tab-pool">
             <ArrowDownToLine className="w-4 h-4 mr-2" /> Zone Pool IN ({pool.length})
           </TabsTrigger>
-          <TabsTrigger value="out" className="tab-pill data-[state=active]:bg-rose-100 data-[state=active]:text-rose-800 font-bold" data-testid="tab-out">
+          <TabsTrigger value="out" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-rose-100 data-[state=active]:text-rose-800 font-bold" data-testid="tab-out">
             <ArrowUpFromLine className="w-4 h-4 mr-2" /> Out of Zone
           </TabsTrigger>
-          <TabsTrigger value="unmatched" className="tab-pill data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800 font-bold" data-testid="tab-unmatched">
+          <TabsTrigger value="unmatched" className="tab-pill text-slate-600 hover:bg-slate-50 hover:text-slate-900 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800 font-bold" data-testid="tab-unmatched">
             <AlertTriangle className="w-4 h-4 mr-2 text-amber-600" /> Unmatched Locations ({Array.isArray(unmatchedLocs) ? unmatchedLocs.length : 0})
           </TabsTrigger>
         </TabsList>

@@ -65,7 +65,7 @@ export default function LoginPage() {
         localStorage.setItem('pz_token', data.token);
         
         setTimeout(() => {
-          if (portal === 'admin') {
+          if (data.user?.role?.toUpperCase() === 'ADMIN' || portal === 'admin') {
             router.push('/admin');
           } else {
             router.push('/dashboard');

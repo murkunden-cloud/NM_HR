@@ -27,16 +27,18 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
-    // Try to find matching employee record
-    const employee = await prisma.employee.findUnique({
-      where: { empno: username }
+    // Try to find matching employee record (case insensitive)
+    const employee = await prisma.employee.findFirst({
+      where: { 
+        empno: { equals: username, mode: 'insensitive' }
+      }
     });
 
     // Also fetch leave balances
-    let leaves = [];
+    let leaves: any[] = [];
     if (employee) {
       leaves = await prisma.leaveRecord.findMany({
-        where: { empno: username }
+        where: { empno: employee.empno }
       });
     }
 

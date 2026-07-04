@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
-import { SANCTION_III as initialSanctionIII, SANCTION_IV as initialSanctionIV, FILLED_III_MASTER as initialFilledIII, FILLED_IV_MASTER as initialFilledIV, SURPLUS_III as initialSurplusIII, SURPLUS_IV as initialSurplusIV } from "./data";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MASTER DATA  (never mutated)
@@ -32,6 +31,44 @@ function extractSheetData(arrayBuffer, sheetName) {
   return data;
 }
 
+function parseRows(buf, sheet) {
+  const wb2 = XLSX.read(buf, { type: "array" });
+  if (!wb2.Sheets[sheet]) return { regular: [], surplus: [] };
+  const ws2 = wb2.Sheets[sheet];
+  const rows2 = XLSX.utils.sheet_to_json(ws2, { header: 1 });
+  const header = rows2[0] || [];
+  const remarkIdx = header.findIndex(h => String(h||'').toLowerCase().includes('remark'));
+  const regular = [], surplus = [];
+  let lastRegular = null; // track adjacency for adjustedAgainst
+  for (let i = 1; i < rows2.length; i++) {
+    const row = rows2[i];
+    if (!row || !row[2]) continue;
+    const remarkVal = remarkIdx >= 0 ? String(row[remarkIdx] || '').toLowerCase() : '';
+    const isSurplus = remarkVal.includes('surp') || remarkVal.includes('supl');
+    const obj = {};
+    obj.circle = row[0]; obj.division = row[1] || undefined;
+    obj.designation = row[2];
+    obj.sanctionType = row[3] || (isSurplus ? 'Surplus (Adjusted)' : undefined);
+    CASTES.forEach((c, idx) => { obj[c] = Number(row[4 + idx] || 0); });
+    if (isSurplus) {
+      obj.isSurplus = true;
+      if (lastRegular) {
+        obj.adjustedAgainst = {
+          designation:  lastRegular.designation,
+          sanctionType: lastRegular.sanctionType,
+          circle:       lastRegular.circle,
+          division:     lastRegular.division
+        };
+      }
+      surplus.push(obj);
+    } else {
+      lastRegular = obj;
+      regular.push(obj);
+    }
+  }
+  return { regular, surplus };
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -45,8 +82,8 @@ const DIVS = {
   PRC:["Manchar Division","Rajgurunagar Division","Pune Mulshi Division","Mulshi Division"],
 };
 // These are initial values, we use dynamic ones in the app
-const ALL_D3 = [...new Set(initialSanctionIII.map(r=>r.designation))];
-const ALL_D4 = [...new Set(initialSanctionIV.map(r=>r.designation))];
+const ALL_D3 = [];
+const ALL_D4 = [];
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -216,12 +253,13 @@ export default function RosterView(){
   const [cls, setCls] = useState("III");
   const [selCircles, setSelCircles] = useState([...CIRCLES]);
   const [selDivs, setSelDivs] = useState({RPUC:[...DIVS.RPUC],GKUC:[...DIVS.GKUC],PRC:[...DIVS.PRC]});
-  const [sanctionIII, setSanctionIII] = useState(initialSanctionIII);
-  const [sanctionIV, setSanctionIV] = useState(initialSanctionIV);
-  const [filledIII, setFilledIII] = useState(initialFilledIII);
-  const [filledIV, setFilledIV] = useState(initialFilledIV);
-  const [surplusIII, setSurplusIII] = useState(initialSurplusIII);
-  const [surplusIV, setSurplusIV] = useState(initialSurplusIV);
+  const [sanctionIII, setSanctionIII] = useState([]);
+  const [sanctionIV, setSanctionIV] = useState([]);
+  const [filledIII, setFilledIII] = useState([]);
+  const [filledIV, setFilledIV] = useState([]);
+  const [surplusIII, setSurplusIII] = useState([]);
+  const [surplusIV, setSurplusIV] = useState([]);
+  const [loading, setLoading] = useState(true);
   // surplusEdits: key = circle||division||surplusDesig => {SC,ST,...} overrides
   const [surplusEdits, setSurplusEdits] = useState(() => {
     try { return JSON.parse(localStorage.getItem("msedcl_surplusEdits") || "{}"); } catch { return {}; }
@@ -233,7 +271,7 @@ export default function RosterView(){
   const [manualSurplusIV, setManualSurplusIV] = useState(() => {
     try { return JSON.parse(localStorage.getItem("msedcl_manualSurplusIV") || "[]"); } catch { return []; }
   });
-  const [selDesigs, setSelDesigs] = useState([...new Set(initialSanctionIII.map(r=>r.designation))]);
+  const [selDesigs, setSelDesigs] = useState([]);
   // edits stored separately for sanction & filled, keyed by rowKey
   // Hydrate from localStorage on first load
   const [sanctionEdits, setSanctionEdits] = useState(() => {
@@ -270,6 +308,12 @@ export default function RosterView(){
       setSanctionIV(sIV);
       setSelDesigs(cls === "III" ? [...new Set(sIII.map(r=>r.designation))] : [...new Set(sIV.map(r=>r.designation))]);
       setSanctionEdits({});
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'sanction');
+      await fetch('/api/roster', { method: 'POST', body: formData });
+      
       setSaveMsg("✅ Sanction file loaded successfully!");
       setTimeout(()=>setSaveMsg(""),4000);
     }
@@ -279,47 +323,17 @@ export default function RosterView(){
     const file = e.target.files[0];
     if (file) {
       const buffer = await file.arrayBuffer();
-      const parseRows = (buf, sheet) => {
-        const wb2 = XLSX.read(buf, { type: "array" });
-        const ws2 = wb2.Sheets[sheet];
-        const rows2 = XLSX.utils.sheet_to_json(ws2, { header: 1 });
-        const header = rows2[0] || [];
-        const remarkIdx = header.findIndex(h => String(h||'').toLowerCase().includes('remark'));
-        const regular = [], surplus = [];
-        let lastRegular = null; // track adjacency for adjustedAgainst
-        for (let i = 1; i < rows2.length; i++) {
-          const row = rows2[i];
-          if (!row || !row[2]) continue;
-          const remarkVal = remarkIdx >= 0 ? String(row[remarkIdx] || '').toLowerCase() : '';
-          const isSurplus = remarkVal.includes('surp') || remarkVal.includes('supl');
-          const obj = {};
-          obj.circle = row[0]; obj.division = row[1] || undefined;
-          obj.designation = row[2];
-          obj.sanctionType = row[3] || (isSurplus ? 'Surplus (Adjusted)' : undefined);
-          CASTES.forEach((c, idx) => { obj[c] = Number(row[4 + idx] || 0); });
-          if (isSurplus) {
-            obj.isSurplus = true;
-            if (lastRegular) {
-              obj.adjustedAgainst = {
-                designation:  lastRegular.designation,
-                sanctionType: lastRegular.sanctionType,
-                circle:       lastRegular.circle,
-                division:     lastRegular.division
-              };
-            }
-            surplus.push(obj);
-          } else {
-            lastRegular = obj;
-            regular.push(obj);
-          }
-        }
-        return { regular, surplus };
-      };
       const { regular: fIII, surplus: sIII2 } = parseRows(buffer, "III");
       const { regular: fIV,  surplus: sIV2  } = parseRows(buffer, "IV");
       setFilledIII(fIII); setSurplusIII(sIII2);
       setFilledIV(fIV);   setSurplusIV(sIV2);
       setFilledEdits({});
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'filled');
+      await fetch('/api/roster', { method: 'POST', body: formData });
+      
       setSaveMsg("✅ Filled file loaded successfully!");
       setTimeout(()=>setSaveMsg(""),4000);
     }
@@ -387,7 +401,7 @@ export default function RosterView(){
         vacant:vacant(s,fWithSurplus)
       };
     });
-  },[selCircles,selDivs,selDesigs,sanctionEdits,filledEdits,surplusEdits,surplusIII,surplusIV,manualSurplusIII,manualSurplusIV]);
+  },[selCircles,selDivs,selDesigs,sanctionEdits,filledEdits,surplusEdits,surplusIII,surplusIV,manualSurplusIII,manualSurplusIV,sanctionIII,sanctionIV,filledIII,filledIV]);
 
   // Edit dispatcher
   const rows3 = useMemo(()=>buildRows("III"),[buildRows]);
@@ -407,17 +421,33 @@ export default function RosterView(){
     return g;
   },[activeRows]);
 
-  // Save handler — commits all pending edits, persists to localStorage
-  const handleSave = () => {
-    const ts = new Date().toLocaleString("en-IN");
-    localStorage.setItem("msedcl_sanctionEdits", JSON.stringify(sanctionEdits));
-    localStorage.setItem("msedcl_filledEdits", JSON.stringify(filledEdits));
-    localStorage.setItem("msedcl_surplusEdits", JSON.stringify(surplusEdits));
-    localStorage.setItem("msedcl_lastSaved", ts);
-    setPendingSaved(true);
-    setLastSaved(ts);
-    setSaveMsg(`✅ Saved at ${new Date().toLocaleTimeString("en-IN")}`);
-    setTimeout(()=>setSaveMsg(""),4000);
+
+  // Save handler — commits all pending edits, persists to DB
+  const handleSave = async () => {
+    try {
+      setSaveMsg("⏳ Saving to database...");
+      const res = await fetch('/api/roster/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edits: sanctionEdits })
+      });
+      
+      if (!res.ok) throw new Error("Failed to save");
+      
+      const ts = new Date().toLocaleString("en-IN");
+      localStorage.setItem("msedcl_sanctionEdits", JSON.stringify(sanctionEdits));
+      localStorage.setItem("msedcl_filledEdits", JSON.stringify(filledEdits));
+      localStorage.setItem("msedcl_surplusEdits", JSON.stringify(surplusEdits));
+      localStorage.setItem("msedcl_lastSaved", ts);
+      setPendingSaved(true);
+      setLastSaved(ts);
+      setSaveMsg(`✅ Saved to database at ${new Date().toLocaleTimeString("en-IN")}`);
+      setTimeout(()=>setSaveMsg(""), 4000);
+    } catch (e) {
+      console.error(e);
+      setSaveMsg("❌ Error saving to database");
+      setTimeout(()=>setSaveMsg(""), 4000);
+    }
   };
 
   // Reset all edits — clears localStorage and reverts to master data
@@ -476,106 +506,69 @@ export default function RosterView(){
   };
 
 
-  // Refresh data from Excel files
-  const handleRefresh = async () => {
-    if (!window.confirm("This will regenerate data from Excel files. Any unsaved edits will be lost. Continue?")) return;
-    
-    setRefreshing(true);
-    setSaveMsg("🔄 Refreshing data from Excel files...");
-    
+
+  const fetchRoster = async () => {
     try {
-      const response = await fetch("http://localhost:3001/api/refresh-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
+      setLoading(true);
       
-      const result = await response.json();
-      
-      if (result.success) {
-        setSaveMsg("✅ Data refreshed successfully! Reloading page...");
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
-      } else {
-        setSaveMsg(`❌ Failed to refresh: ${result.message}`);
-        setTimeout(() => setSaveMsg(""), 4000);
+      // Auto-load Sanction file
+      const resSanction = await fetch('/api/roster?action=download&type=sanction', { cache: 'no-store' });
+      if (resSanction.ok) {
+        const buffer = await resSanction.arrayBuffer();
+        const sIII = extractSheetData(buffer, "III");
+        const sIV = extractSheetData(buffer, "IV");
+        setSanctionIII(sIII);
+        setSanctionIV(sIV);
+        const allDesigs = cls === "III" ? [...new Set(sIII.map(r=>r.designation))] : [...new Set(sIV.map(r=>r.designation))];
+        if (allDesigs.length) setSelDesigs(allDesigs);
       }
-    } catch (error) {
-      setSaveMsg("❌ Server not running. Start server with 'npm run server'");
-      setTimeout(() => setSaveMsg(""), 4000);
+      
+      // Auto-load Filled file
+      const resFilled = await fetch('/api/roster?action=download&type=filled', { cache: 'no-store' });
+      if (resFilled.ok) {
+        const buffer = await resFilled.arrayBuffer();
+        const { regular: fIII, surplus: sIII2 } = parseRows(buffer, "III");
+        const { regular: fIV,  surplus: sIV2  } = parseRows(buffer, "IV");
+        setFilledIII(fIII); setSurplusIII(sIII2);
+        setFilledIV(fIV);   setSurplusIV(sIV2);
+      }
+      
+      if (!resSanction.ok && !resFilled.ok) {
+        // Fallback to database if files not found
+        const res = await fetch('/api/roster', { cache: 'no-store' });
+        const data = await res.json();
+        const { sanctionArr, filledArr } = data;
+        
+        setSanctionIII(sanctionArr.filter(r => r.sanctionType === "III"));
+        setSanctionIV(sanctionArr.filter(r => r.sanctionType === "IV"));
+        setFilledIII(filledArr.filter(r => r.sanctionType === "III"));
+        setFilledIV(filledArr.filter(r => r.sanctionType === "IV"));
+        
+        const allDesigs = [...new Set(sanctionArr.map(r => r.designation))];
+        if (allDesigs.length) setSelDesigs(allDesigs);
+      }
+      
+    } catch (err) {
+      console.error(err);
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   };
 
-  // Auto-refresh check - runs periodically
-  const checkAutoRefresh = async () => {
-    try {
-      const response = await fetch("http://localhost:3001/api/check-modifications");
-      const result = await response.json();
-      
-      setAutoUpdateStatus({
-        monitoring: true,
-        lastCheck: new Date().toLocaleTimeString(),
-        modificationsDetected: result.modified
-      });
-      
-      if (result.modified) {
-        setSaveMsg("📝 Excel files modified - auto-refresh available");
-        // Optionally trigger auto-refresh automatically
-        // await handleAutoRefresh();
-      }
-    } catch (error) {
-      setAutoUpdateStatus(prev => ({ ...prev, monitoring: false }));
-    }
-  };
-
-  // Auto-refresh trigger
   const handleAutoRefresh = async () => {
-    setRefreshing(true);
-    setSaveMsg("🔄 Auto-refreshing data...");
-    
-    try {
-      const response = await fetch("http://localhost:3001/api/auto-refresh", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        if (result.autoTriggered) {
-          setSaveMsg("✅ Auto-refresh completed! Reloading page...");
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-        } else {
-          setSaveMsg("ℹ️ No modifications detected - no refresh needed");
-          setTimeout(() => setSaveMsg(""), 3000);
-        }
-      } else {
-        setSaveMsg(`❌ Auto-refresh failed: ${result.message}`);
-        setTimeout(() => setSaveMsg(""), 4000);
-      }
-    } catch (error) {
-      setSaveMsg("❌ Server not running for auto-refresh");
-      setTimeout(() => setSaveMsg(""), 4000);
-    } finally {
-      setRefreshing(false);
-    }
+    await handleRefresh();
+    setAutoUpdateStatus(p => ({ ...p, modificationsDetected: false }));
   };
 
-  // Set up periodic auto-refresh check
   useEffect(() => {
-    const interval = setInterval(() => {
-      checkAutoRefresh();
-    }, 30000); // Check every 30 seconds
-    
-    // Initial check
-    checkAutoRefresh();
-    
-    return () => clearInterval(interval);
+    fetchRoster();
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchRoster();
+    setRefreshing(false);
+  };
 
   const applyEdit = (type, key, field, val) => {
     const num = parseInt(val)||0;
@@ -958,8 +951,8 @@ function DesigTable({desig,rows,mode,cls}){
             {rows.map((r,ri)=>(
               <>
                 {showSanction&&(
-                  <tr key={`${r.key}|s`} style={{background:ri%2===0?"#eff6ff":"#dbeafe",borderBottom:"1px solid #bfdbfe"}}>
-                    <td style={{...TD,fontWeight:700,color:"#1d4ed8"}}>{r.circle}</td>
+                  <tr key={`${r.key}|s`} style={{background:ri%2===0?"rgba(30,41,59,0.4)":"rgba(56,189,246,0.1)",borderBottom:"1px solid rgba(148,163,184,0.15)"}}>
+                    <td style={{...TD,fontWeight:700,color:"#60a5fa"}}>{r.circle}</td>
                     {cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
                     <td style={{...TD,fontSize:10}}>{r.sanctionType}</td>
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.sanction,background:TBG.sanction,whiteSpace:"nowrap"}}>SANCTIONED</td>
@@ -968,17 +961,17 @@ function DesigTable({desig,rows,mode,cls}){
                 )}
 
                 {showFilled&&(
-                  <tr key={`${r.key}|f`} style={{background:ri%2===0?"#f0fdf4":"#dcfce7",borderBottom:r.hasSurplus?"none":"1px solid #86efac"}}>
-                    {!showSanction&&<td style={{...TD,fontWeight:700,color:"#15803d"}}>{r.circle}</td>}
+                  <tr key={`${r.key}|f`} style={{background:ri%2===0?"rgba(16,185,129,0.1)":"rgba(16,185,129,0.15)",borderBottom:r.hasSurplus?"none":"1px solid rgba(16,185,129,0.2)"}}>
+                    {!showSanction&&<td style={{...TD,fontWeight:700,color:"#34d399"}}>{r.circle}</td>}
                     {!showSanction&&cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
-                    {showSanction&&<td style={{...TD,color:"#15803d",fontSize:10}}>↳ {r.circle}</td>}
+                    {showSanction&&<td style={{...TD,color:"#34d399",fontSize:10}}>↳ {r.circle}</td>}
                     {showSanction&&cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
                     <td style={{...TD,fontSize:10}}>{r.sanctionType}</td>
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.filled,background:TBG.filled,whiteSpace:"nowrap"}}>
                       FILLED{r.hasSurplus&&<span style={{marginLeft:4,fontSize:9,color:"#f97316"}}>+SURPLUS</span>}
                     </td>
                     {CASTES.map(c=>(
-                      <td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:"#15803d"}}>
+                      <td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:"#34d399"}}>
                         {r.filled[c]||0}
                         {c==="TOTAL"&&r.hasSurplus&&(
                           <div style={{fontSize:8,color:"#f97316",fontWeight:600}}>({r.filledBase[c]||0}+{(r.filled[c]||0)-(r.filledBase[c]||0)})</div>
@@ -989,17 +982,17 @@ function DesigTable({desig,rows,mode,cls}){
                 )}
 
                 {showFilled&&r.hasSurplus&&r.surplusRows.map((sr,si)=>(
-                  <tr key={`${r.key}|surplus|${si}`} style={{background:"#fff7ed",borderBottom:si===r.surplusRows.length-1?"1px solid #fed7aa":"1px dashed #fde68a"}}>
-                    <td style={{...TD,color:"#92400e",fontSize:10,paddingLeft:16}}>↳</td>
-                    {cls==="IV"&&<td style={{...TD,fontSize:9,color:"#92400e"}}>{sr.division||"—"}</td>}
+                  <tr key={`${r.key}|surplus|${si}`} style={{background:"rgba(249,115,22,0.1)",borderBottom:si===r.surplusRows.length-1?"1px solid rgba(249,115,22,0.3)":"1px dashed rgba(249,115,22,0.2)"}}>
+                    <td style={{...TD,color:"#f97316",fontSize:10,paddingLeft:16}}>↳</td>
+                    {cls==="IV"&&<td style={{...TD,fontSize:9,color:"#f97316"}}>{sr.division||"—"}</td>}
                     <td style={{...TD,fontSize:10}}>
-                      <span style={{fontStyle:"italic",color:"#78350f"}}>From: <b>{sr.designation}</b></span>
+                      <span style={{fontStyle:"italic",color:"#fdba74"}}>From: <b>{sr.designation}</b></span>
                     </td>
                     <td style={{...TD,whiteSpace:"nowrap"}}>
                       <span style={{background:"#f97316",color:"#fff",padding:"2px 7px",borderRadius:4,fontSize:9,fontWeight:700,letterSpacing:0.5}}>SURPLUS</span>
                     </td>
                     {CASTES.map(c=>(
-                      <td key={c} style={{...TD,textAlign:"center",fontSize:10,color:"#92400e",fontWeight:c==="TOTAL"?700:400,background:"rgba(249,115,22,0.06)"}}>
+                      <td key={c} style={{...TD,textAlign:"center",fontSize:10,color:"#f97316",fontWeight:c==="TOTAL"?700:400,background:"rgba(249,115,22,0.1)"}}>
                         {sr[c]||0}
                       </td>
                     ))}
@@ -1007,16 +1000,16 @@ function DesigTable({desig,rows,mode,cls}){
                 ))}
 
                 {showVacant&&(
-                  <tr key={`${r.key}|v`} style={{background:ri%2===0?"#fff1f2":"#fee2e2",borderBottom:"1px solid #fecaca"}}>
-                    {!showSanction&&!showFilled&&<td style={{...TD,fontWeight:700,color:"#dc2626"}}>{r.circle}</td>}
+                  <tr key={`${r.key}|v`} style={{background:ri%2===0?"rgba(239,68,68,0.1)":"rgba(239,68,68,0.15)",borderBottom:"1px solid rgba(239,68,68,0.2)"}}>
+                    {!showSanction&&!showFilled&&<td style={{...TD,fontWeight:700,color:"#f87171"}}>{r.circle}</td>}
                     {!showSanction&&!showFilled&&cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
-                    {(showSanction||showFilled)&&<td style={{...TD,color:"#dc2626",fontSize:10}}>↳</td>}
+                    {(showSanction||showFilled)&&<td style={{...TD,color:"#f87171",fontSize:10}}>↳</td>}
                     {(showSanction||showFilled)&&cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
                     <td style={{...TD,fontSize:10}}>{r.sanctionType}</td>
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.vacant,background:TBG.vacant,whiteSpace:"nowrap"}}>VACANT</td>
                     {CASTES.map(c=>{
                       const v=r.vacant[c]||0;
-                      return<td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:v>0?"#dc2626":v<0?"#7c3aed":"inherit"}}>{v}</td>;
+                      return<td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:v>0?"#f87171":v<0?"#a78bfa":"#cbd5e1"}}>{v}</td>;
                     })}
                   </tr>
                 )}

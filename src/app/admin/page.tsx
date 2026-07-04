@@ -638,7 +638,13 @@ export default function AdminWorkspace() {
     setNewTransType(trans.transfer_type || 'Internal');
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    localStorage.removeItem('pz_token');
     router.push('/login');
   };
 
@@ -1257,7 +1263,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group" style={{ gridColumn: 'span 2' }}>
                             <label>Local Area / Stay Remarks</label>
-                            <textarea style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', color: 'white', padding: '0.5rem', borderRadius: '0.375rem', height: '60px' }} value={selectedEmp.stay_details || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, stay_details: e.target.value })} placeholder="Enter details of previous station stay duration..." />
+                            <textarea style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', padding: '0.5rem', borderRadius: '0.375rem', height: '60px' }} value={selectedEmp.stay_details || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, stay_details: e.target.value })} placeholder="Enter details of previous station stay duration..." />
                           </div>
                         </div>
                       )}
@@ -1377,7 +1383,7 @@ export default function AdminWorkspace() {
                                   </div>
                                 )) : <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>No promotion records found.</span>}
                               </div>
-                              <form onSubmit={handleAddPromotion} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.01)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
+                              <form onSubmit={handleAddPromotion} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingPromId ? 'Edit Promotion' : 'Record Promotion'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
                                   <input type="date" value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
@@ -1422,7 +1428,7 @@ export default function AdminWorkspace() {
                                   </div>
                                 )) : <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>No transfer records found.</span>}
                               </div>
-                              <form onSubmit={handleAddTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.01)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
+                              <form onSubmit={handleAddTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingTransferId ? 'Edit Transfer' : 'Record Transfer'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
                                   <input type="date" value={newTransDate} onChange={(e) => setNewTransDate(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }} title="Transfer Order Date" />
@@ -1702,7 +1708,7 @@ export default function AdminWorkspace() {
                   </div>
                 )}
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: '0.75rem', background: 'rgba(255,255,255,0.02)', padding: '1.25rem', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: '0.75rem', background: 'rgba(30,41,59,0.5)', padding: '1.25rem', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
                   <div className="form-group">
                     <label>Class Group</label>
                     <select value={seniorityClass} onChange={(e) => setSeniorityClass(e.target.value as 'III' | 'IV')} style={{ fontSize: '0.8rem', padding: '0.5rem' }}>
@@ -1791,7 +1797,7 @@ export default function AdminWorkspace() {
                     <h4 style={{ margin: 0 }}>Generated Seniority Roster ({seniorityReport.length} personnel)</h4>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={handleBulkUpdateSeniority} style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', background: 'var(--green-accent)', border: 'none', borderRadius: '0.25rem', color: 'black', cursor: 'pointer', fontWeight: 'bold' }}>💾 Save All Changes</button>
-                      <button onClick={handleExportExcel} style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid var(--border-glass)', borderRadius: '0.25rem', color: 'white', cursor: 'pointer' }}>📥 Download Seniority List (Excel)</button>
+                      <button onClick={handleExportExcel} style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', background: 'rgba(56,189,248,0.15)', border: '1px solid var(--border-glass)', borderRadius: '0.25rem', color: 'white', cursor: 'pointer', fontWeight: '600' }}>📥 Download Seniority List (Excel)</button>
                     </div>
                   </div>
                   
@@ -1828,7 +1834,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="number" 
                                 defaultValue={emp.seniorityNo} 
-                                style={{ width: '70px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }} 
+                                style={{ width: '70px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }} 
                                 id={`sen_no_${emp.empNo}`}
                               />
                             </td>
@@ -1837,7 +1843,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="text" 
                                 defaultValue={emp.employeeName || ''} 
-                                style={{ width: '120px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '120px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_empnm_${emp.empNo}`}
                               />
                             </td>
@@ -1847,7 +1853,7 @@ export default function AdminWorkspace() {
                               <select 
                                 defaultValue={emp.casteCategory || ''}
                                 id={`sen_castcat_${emp.empNo}`}
-                                style={{ width: '90px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '90px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                               >
                                 <option value="">Select</option>
                                 <option value="OPEN">OPEN</option>
@@ -1866,7 +1872,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="text" 
                                 defaultValue={emp.subCaste || ''} 
-                                style={{ width: '80px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '80px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_subcast_${emp.empNo}`}
                               />
                             </td>
@@ -1874,7 +1880,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="text" 
                                 defaultValue={emp.casteValidityStatus || ''} 
-                                style={{ width: '100px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '100px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_castvalstat_${emp.empNo}`}
                               />
                             </td>
@@ -1882,7 +1888,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="text" 
                                 defaultValue={emp.casteValidityCertNo || ''} 
-                                style={{ width: '100px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '100px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_castvalno_${emp.empNo}`}
                               />
                             </td>
@@ -1890,7 +1896,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="date" 
                                 defaultValue={convertDisplayDateToInput(emp.casteValidityDate || '')} 
-                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_castvaldt_${emp.empNo}`}
                               />
                             </td>
@@ -1900,7 +1906,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="date" 
                                 defaultValue={convertDisplayDateToInput(emp.transferDate || '')} 
-                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_transdt_${emp.empNo}`}
                               />
                             </td>
@@ -1908,7 +1914,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="text" 
                                 defaultValue={emp.transferType || ''} 
-                                style={{ width: '90px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '90px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_transtype_${emp.empNo}`}
                               />
                             </td>
@@ -1917,7 +1923,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="date" 
                                 defaultValue={convertDisplayDateToInput(emp.dateJoinedCompany || '')} 
-                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_compjoindt_${emp.empNo}`}
                               />
                             </td>
@@ -1925,7 +1931,7 @@ export default function AdminWorkspace() {
                               <input 
                                 type="date" 
                                 defaultValue={convertDisplayDateToInput(emp.presentPostJoiningDate || '')} 
-                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_ppljoindt_${emp.empNo}`}
                               />
                             </td>
@@ -1936,14 +1942,14 @@ export default function AdminWorkspace() {
                               <input 
                                 type="date" 
                                 defaultValue={convertDisplayDateToInput(emp.dateOfBirth || '')} 
-                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px' }}
+                                style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_brthdt_${emp.empNo}`}
                               />
                             </td>
                             <td>
                               <textarea 
                                 defaultValue={emp.remarks || ''} 
-                                style={{ width: '100px', padding: '0.2rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)', borderRadius: '3px', fontSize: '0.7rem', resize: 'vertical', minHeight: '40px' }}
+                                style={{ width: '100px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px', fontSize: '0.7rem', resize: 'vertical', minHeight: '40px' }}
                                 id={`sen_remarks_${emp.empNo}`}
                               />
                             </td>
@@ -2106,7 +2112,7 @@ export default function AdminWorkspace() {
                             <h4>🏖️ LAP Leave Encashment</h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
                               <label style={{ fontSize: '0.75rem' }}>Capped Days:</label>
-                              <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)' }} />
+                              <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
                             </div>
                             <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays}) &divide; 30</p>
                             <h3>₹{lapAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
@@ -2116,7 +2122,7 @@ export default function AdminWorkspace() {
                             <h4>🏥 COM Leave Encashment</h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
                               <label style={{ fontSize: '0.75rem' }}>Capped Days:</label>
-                              <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-glass)' }} />
+                              <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
                             </div>
                             <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays}) &divide; 30</p>
                             <h3>₹{comAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
@@ -2289,7 +2295,7 @@ export default function AdminWorkspace() {
 
           {/* TAB: VACANCY */}
           {activeTab === 'vacancy' && (
-            <div className="vacancy-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
+            <div className="vacancy-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto', backgroundColor: '#ffffff', color: '#0f172a', borderRadius: '1rem', padding: '1.5rem' }}>
               <VacancyView />
             </div>
           )}

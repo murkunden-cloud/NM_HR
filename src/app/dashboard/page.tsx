@@ -16,6 +16,12 @@ interface EmployeeInfo {
   desigz: string | null;
   basic: number;
   payscl: string | null;
+  compjoindt: string | null;
+  brthdt: string | null;
+  mobileno: string | null;
+  email: string | null;
+  panno: string | null;
+  locnm: string | null;
 }
 
 interface LeaveRecord {
@@ -63,10 +69,12 @@ export default function EmployeeDashboard() {
   }, [router]);
 
   const handleSignOut = async () => {
-    // In a real app we would call a logout API endpoint to clear the HTTP-only cookie
-    // For now we clear localStorage/sessionStorage if any, and rely on route changes
-    // It's recommended to create a /api/auth/logout endpoint but for simplicity we redirect to login which may override session on next login
-    document.cookie = 'pzhr_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    localStorage.removeItem('pz_token');
     router.push('/login');
   };
 
@@ -113,6 +121,8 @@ export default function EmployeeDashboard() {
   const displayName = employee?.empnm || user?.full_name || user?.username || 'Employee';
   const designation = employee?.desigz || user?.role || 'Staff';
 
+  const isUnlinkedAdmin = !employee && user?.role === 'ADMIN';
+
   return (
     <div className="dashboard-container">
       {/* Top Header */}
@@ -133,6 +143,14 @@ export default function EmployeeDashboard() {
           Sign Out
         </button>
       </header>
+
+      {/* Unlinked Profile Warning */}
+      {isUnlinkedAdmin && (
+        <div style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', border: '1px solid #ffeeba' }}>
+          <strong>Notice:</strong> You are logged in as an Admin user, but there is no matching Employee record for your username (<strong>{user?.username}</strong>). 
+          The dashboard below is showing fallback sample data. To see a real dashboard, please log in with a normal Employee account (e.g., using their Employee Number).
+        </div>
+      )}
 
       {/* Stats Grid */}
       <section className="stats-grid">
@@ -243,22 +261,37 @@ export default function EmployeeDashboard() {
               </h2>
             </div>
 
-            <div className="roster-schedule" style={{ padding: '1rem' }}>
-              <div style={{ marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Employee No</span>
-                <div style={{ fontWeight: 500, color: '#0f172a' }}>{employee?.empno || user?.username || 'N/A'}</div>
+            <div className="biodata-list">
+              <div className="biodata-item">
+                <span className="biodata-label">Employee No</span>
+                <span className="biodata-value">{employee?.empno || user?.username || 'N/A'}</span>
               </div>
-              <div style={{ marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Designation</span>
-                <div style={{ fontWeight: 500, color: '#0f172a' }}>{designation}</div>
+              <div className="biodata-item">
+                <span className="biodata-label">Designation</span>
+                <span className="biodata-value">{designation}</span>
               </div>
-              <div style={{ marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Role</span>
-                <div style={{ fontWeight: 500, color: '#0f172a' }}>{user?.role || 'N/A'}</div>
+              <div className="biodata-item">
+                <span className="biodata-label">Location</span>
+                <span className="biodata-value">{employee?.locnm || 'HQ'}</span>
               </div>
-              <div>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Status</span>
-                <div style={{ fontWeight: 500, color: '#16a34a' }}>Active Employee</div>
+              <div className="biodata-item">
+                <span className="biodata-label">Date of Joining</span>
+                <span className="biodata-value">{employee?.compjoindt || 'N/A'}</span>
+              </div>
+              <div className="biodata-item">
+                <span className="biodata-label">Date of Birth</span>
+                <span className="biodata-value">{employee?.brthdt || 'N/A'}</span>
+              </div>
+              <div className="biodata-item">
+                <span className="biodata-label">Contact</span>
+                <span className="biodata-value">
+                  {employee?.mobileno || 'N/A'}<br/>
+                  <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>{employee?.email || ''}</span>
+                </span>
+              </div>
+              <div className="biodata-item" style={{ borderLeftColor: '#10b981' }}>
+                <span className="biodata-label">Status</span>
+                <span className="status-badge">Active Employee</span>
               </div>
             </div>
           </div>
