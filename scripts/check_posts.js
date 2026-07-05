@@ -6,13 +6,13 @@ async function main() {
     select: { types: true, cat: true, desigz: true },
     take: 100
   });
-  
   const distinctTypes = [...new Set(posts.map(p => p.types))];
   const distinctCat = [...new Set(posts.map(p => p.cat))];
-  
+
+
   console.log("Distinct Types:", distinctTypes);
   console.log("Distinct Categories:", distinctCat);
-  
+
   // Show a few examples
   console.log("Samples:", posts.slice(0, 10));
 }
