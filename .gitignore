@@ -48,3 +48,8 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Ignore local test data and daemon files
+*.xlsx
+daemon/
+.pkg-cache/
