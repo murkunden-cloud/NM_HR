@@ -288,6 +288,7 @@ export default function AdminWorkspace() {
       if (res.ok) {
         const data = await res.json();
         setEmployees(data.employees || []);
+        setActiveTab('employees');
       }
     } catch (err) {
       console.error(err);
@@ -1143,7 +1144,7 @@ export default function AdminWorkspace() {
             <p>Active Scope: Pune Zone HR Operations</p>
           </div>
           <div className="header-actions">
-            {activeTab === 'employees' && (
+            {(activeTab === 'employees' || activeTab === 'dashboard') && (
               <>
                 <input
                   type="text"
