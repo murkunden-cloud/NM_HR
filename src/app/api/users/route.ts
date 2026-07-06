@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const users = await prisma.user.findMany();
@@ -27,7 +29,8 @@ export async function POST(request: Request) {
       }
     });
     return NextResponse.json(newUser, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+  } catch (error: any) {
+    console.error("CREATE USER ERROR:", error);
+    return NextResponse.json({ error: 'Failed to create user', details: error?.message || String(error) }, { status: 500 });
   }
 }

@@ -181,14 +181,15 @@ export default function UserManagementView() {
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Username</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Full Name</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Role</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Scope</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', color: '#ffffff' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center' }}>Loading...</td></tr>
+              <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center' }}>Loading...</td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center' }}>No users found</td></tr>
+              <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center' }}>No users found</td></tr>
             ) : (
               users.map(u => (
                 <tr key={u.username} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
@@ -205,6 +206,9 @@ export default function UserManagementView() {
                     }}>
                       {u.role}
                     </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', color: '#cbd5e1', fontSize: '0.85rem' }}>
+                    {[u.zonenm, u.circl, u.divnm, u.subdnm].filter(Boolean).join(' / ') || 'Global'}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
                     <button onClick={() => handleOpenEdit(u)} style={{ marginRight: '0.5rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Edit</button>

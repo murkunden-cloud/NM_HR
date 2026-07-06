@@ -296,3 +296,11 @@ model LocationMapping {
 
   @@map("location_mappings")
 }
+
+model GuestSession {
+  token      String   @id
+  username   String
+  lastActive DateTime @default(now())
+
+  @@map("guest_sessions")
+}

@@ -48,8 +48,36 @@ export async function POST(request: Request) {
       // Allow admins to login to Employee Portal as well if desired, or verify Employee portal access.
     }
 
-    // 5. Generate Session Token
+    // 5. Check Guest Session Limits
+    if (user.role === 'GUEST') {
+      const oneMinuteAgo = new Date(Date.now() - 60000);
+      
+      // Delete expired guest sessions
+      await prisma.guestSession.deleteMany({
+        where: { lastActive: { lt: oneMinuteAgo } }
+      });
+      
+      // Check active count
+      const activeCount = await prisma.guestSession.count();
+      if (activeCount >= 5) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Guest login limit reached. Maximum 5 guest users can login at a time. Please try again later.' 
+        }, { status: 403 });
+      }
+    }
+
+    // 6. Generate Session Token
     const sessionToken = createSessionToken(user.username, user.role);
+
+    if (user.role === 'GUEST') {
+      await prisma.guestSession.create({
+        data: {
+          token: sessionToken,
+          username: user.username,
+        }
+      });
+    }
 
     // 6. Return Response and Set Cookie
     const response = NextResponse.json({

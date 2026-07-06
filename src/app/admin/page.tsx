@@ -1143,14 +1143,18 @@ export default function AdminWorkspace() {
             <p>Active Scope: Pune Zone HR Operations</p>
           </div>
           <div className="header-actions">
-            <input
-              type="text"
-              placeholder="Search CPF No / Name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="quick-search-input"
-            />
-            <button onClick={handleSearch} className="search-action-btn">Search</button>
+            {activeTab === 'employees' && (
+              <>
+                <input
+                  type="text"
+                  placeholder="Search CPF No / Name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="quick-search-input"
+                />
+                <button onClick={handleSearch} className="search-action-btn">Search</button>
+              </>
+            )}
           </div>
         </header>
 

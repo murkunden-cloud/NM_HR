@@ -1,41 +1,43 @@
 =========================================================
-          NM_HR PROJECT - LAUNCH INSTRUCTIONS
+          NM_HR PROJECT - WORKFLOW & LAUNCH GUIDE
 =========================================================
 
-1. LIVE CLOUD DEPLOYMENT (Vercel)
+1. THE DESKTOP APP (NM_HR_Portal.exe)
 ---------------------------------------------------------
-This is your live, production website that anyone on the internet can access.
-URL: https://nm-hr-smoky.vercel.app
-How to use: Simply open the URL in any web browser on your phone or computer.
-Database: Connected to your live Supabase remote database.
+On your Windows Desktop, there is an executable called NM_HR_Portal.exe.
+This is a dedicated "wrapper" window that connects directly to your live website (Vercel) and database (Supabase).
+- How to use: Just double-click it. It will open your app like a native Windows program.
+- Auto-Sync: Whatever you do in the Desktop App is instantly saved online. Whatever happens online is instantly visible in the Desktop App.
 
 
-2. LOCAL DEVELOPMENT MODE
+2. HOW TO UPDATE YOUR PROGRAM
 ---------------------------------------------------------
-This is the mode you use when you are actively coding and testing changes. It updates instantly when you save a file.
-How to start:
-  1. Open your terminal in the project folder (d:\MYPRO\pzhr_web)
-  2. Run the command: npm run dev
-  3. Open your browser and go to: http://localhost:3001
-Database: Connected to your Supabase remote database (via .env file).
+When you write new code, fix bugs, or add features using your IDE, those changes only exist on your laptop until you push them to the internet.
+
+To make your updates live:
+  1. Open your terminal in your project folder (d:\MYPRO\pzhr_web).
+  2. Run: git add .
+  3. Run: git commit -m "Describe your update here"
+  4. Run: git push origin main
+     (And if you use the master branch, push there too).
+
+What happens next?
+- Vercel (your hosting provider) automatically detects the push and starts building your updated code.
+- Once Vercel finishes deploying (usually within 1-2 minutes), your live website is updated!
+
+What about the Desktop App (.exe)?
+- You DO NOT need to recreate the .exe file when you update your code!
+- Since the .exe simply acts as a window to your live Vercel website, your new updates will automatically appear inside the .exe the next time you open it.
 
 
-3. LOCAL PRODUCTION MODE
+3. REBUILDING THE DESKTOP APP (Only if needed)
 ---------------------------------------------------------
-This runs the highly optimized, compiled version of your app on your local machine (similar to how Vercel runs it).
-How to start:
-  1. Open your terminal in the project folder.
-  2. Run the command: npm run build
-  3. Once built, run the command: npm run start
-  4. Open your browser and go to: http://localhost:3001
+The ONLY time you need to recreate the .exe file is if you completely change your live Vercel URL, or if you want to change the custom HR Icon (hr_icon.ico).
 
-
-4. WINDOWS BATCH SCRIPTS (Local Auto-Launch)
----------------------------------------------------------
-Your project folder contains several Windows batch scripts created for easy launching without typing commands:
-- start_prod.bat: Double-click this to automatically build and start the production server.
-- Launch_PZHR.bat: Another quick-launch script.
-How to use: Just double-click the .bat file in your Windows File Explorer!
+How to rebuild the .exe:
+  1. Open your project folder (d:\MYPRO\pzhr_web).
+  2. Double-click the file named: build_desktop_app.bat
+  3. It will instantly compile a new NM_HR_Portal.exe and place it on your Desktop.
 
 
 =========================================================
