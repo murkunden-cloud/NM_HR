@@ -1855,7 +1855,7 @@ export default function AdminWorkspace() {
                       {(() => {
                         for (const zone of Object.keys(hierarchyData || {})) {
                           if (hierarchyData[zone]?.circles?.[seniorityCircle]) {
-                            return hierarchyData[zone].circles[seniorityCircle].divisions.map((d: string) => (
+                            return Object.keys(hierarchyData[zone].circles[seniorityCircle].divisions).map((d: string) => (
                               <option key={d} value={d}>{d}</option>
                             ));
                           }
