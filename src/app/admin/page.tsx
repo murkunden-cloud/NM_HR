@@ -1144,7 +1144,7 @@ export default function AdminWorkspace() {
             <p>Active Scope: Pune Zone HR Operations</p>
           </div>
           <div className="header-actions">
-            {(activeTab === 'employees' || activeTab === 'dashboard') && (
+            {activeTab === 'employees' && (
               <>
                 <input
                   type="text"

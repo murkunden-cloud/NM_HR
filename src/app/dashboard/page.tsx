@@ -128,7 +128,7 @@ export default function EmployeeDashboard() {
   return (
     <div className="dashboard-container">
       {/* Top Header */}
-      <header className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header className="dashboard-header">
         <div className="user-info">
           <div className="avatar">{initials}</div>
           <div className="welcome-text">
@@ -136,21 +136,6 @@ export default function EmployeeDashboard() {
             <p>Employee Portal &bull; {designation}</p>
           </div>
         </div>
-        
-        <div style={{ flex: 1, maxWidth: '400px', margin: '0 20px' }}>
-          <form onSubmit={(e) => { e.preventDefault(); setActiveTab('search'); }} style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              placeholder="Search CPF No / Name..."
-              style={{ flex: 1, padding: '10px 15px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none' }}
-              onClick={() => setActiveTab('search')}
-            />
-            <button type="submit" style={{ padding: '10px 15px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-              Search
-            </button>
-          </form>
-        </div>
-
         <button onClick={handleSignOut} className="signout-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
