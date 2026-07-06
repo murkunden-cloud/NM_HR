@@ -11,13 +11,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         select: { circle: true, division: true, designation: true }
       });
       const employees = await prisma.employee.findMany({
-        select: { office: true }
+        select: { divnm: true }
       });
 
       const circles = [...new Set(posts.map(p => p.circle).filter(Boolean))];
       const divisions = [...new Set(posts.map(p => p.division).filter(Boolean))];
       const designations = [...new Set(posts.map(p => p.designation).filter(Boolean))];
-      const orgnames = [...new Set(employees.map(e => e.office).filter(Boolean))];
+      const orgnames = [...new Set(employees.map(e => e.divnm).filter(Boolean))];
 
       return NextResponse.json({
         cadres: ["Unclassified"],
@@ -36,7 +36,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       const posts = await prisma.sanctionedPost.findMany();
       // Fetch all employees to count FILLED_IN
       const employees = await prisma.employee.findMany({
-        select: { office: true, designation: true }
+        select: { divnm: true, desigz: true }
       });
 
       // Fetch transfers out
@@ -48,7 +48,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
       for (const p of posts) {
         // Group employees by office and designation
-        const filled = employees.filter(e => e.office === p.division && e.designation === p.designation).length;
+        const filled = employees.filter(e => e.divnm === p.division && e.desigz === p.designation).length;
         
         // orgname in legacy was division/subdivision?
         const orgname = p.division || 'Unknown';
@@ -91,15 +91,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       const designation = url.searchParams.get('designation');
       if (!orgname || !designation) return NextResponse.json([]);
       const data = await prisma.employee.findMany({
-        where: { office: orgname, designation: designation }
+        where: { divnm: orgname, desigz: designation }
       });
       const mapped = data.map(e => ({
-        id: e.id,
+        id: e.empno,
         name: e.empnm || '',
         cpfno: e.empno,
-        designation: e.designation || '',
-        orgname: e.office || '',
-        original_orgname: e.office || ''
+        designation: e.desigz || '',
+        orgname: e.divnm || '',
+        original_orgname: e.divnm || ''
       }));
       return NextResponse.json(mapped);
     }
@@ -132,9 +132,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       const mapped = data.map(e => ({
         cpfno: e.empno,
         name: e.empnm || '',
-        designation: e.designation || '',
-        office: e.office || '',
-        division: e.office || '', // fallback
+        designation: e.desigz || '',
+        office: e.divnm || '',
+        division: e.divnm || '', // fallback
         circle: ''
       }));
       return NextResponse.json(mapped);
@@ -152,20 +152,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         where.OR = [
           { empnm: { contains: q, mode: 'insensitive' } },
           { empno: { contains: q, mode: 'insensitive' } },
-          { designation: { contains: q, mode: 'insensitive' } },
-          { office: { contains: q, mode: 'insensitive' } }
+          { desigz: { contains: q, mode: 'insensitive' } },
+          { divnm: { contains: q, mode: 'insensitive' } }
         ];
       }
-      if (designation && designation !== 'All') where.designation = designation;
+      if (designation && designation !== 'All') where.desigz = designation;
       
       const data = await prisma.employee.findMany({ where });
       const mapped = data.map(e => ({
-        id: e.id,
+        id: e.empno,
         name: e.empnm || '',
         cpfno: e.empno,
-        designation: e.designation || '',
-        orgname: e.office || '',
-        original_orgname: e.office || ''
+        designation: e.desigz || '',
+        orgname: e.divnm || '',
+        original_orgname: e.divnm || ''
       }));
       return NextResponse.json(mapped);
     }
@@ -175,12 +175,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       const posts = await prisma.sanctionedPost.findMany({ select: { division: true }});
       const validOffices = new Set(posts.map(p => p.division).filter(Boolean));
       
-      const emps = await prisma.employee.findMany({ select: { office: true }});
+      const emps = await prisma.employee.findMany({ select: { divnm: true }});
       
       const unmatchedCounts: Record<string, number> = {};
       for (const e of emps) {
-        if (e.office && !validOffices.has(e.office)) {
-          unmatchedCounts[e.office] = (unmatchedCounts[e.office] || 0) + 1;
+        if (e.divnm && !validOffices.has(e.divnm)) {
+          unmatchedCounts[e.divnm] = (unmatchedCounts[e.divnm] || 0) + 1;
         }
       }
       
