@@ -1870,8 +1870,9 @@ export default function AdminWorkspace() {
                       <option value="">-- Select Post --</option>
                       {posts
                         .filter(p => {
-                           const targetClass = seniorityClass === 'III' ? '3' : '4';
-                           return p.paygrp === targetClass || p.cat?.includes(seniorityClass) || p.types?.includes(seniorityClass);
+                           const matchesClass = p.paygrp === seniorityClass || p.cat?.includes(seniorityClass) || p.types?.includes(seniorityClass);
+                           const matchesCat = seniorityCategory ? p.cat === seniorityCategory : true;
+                           return matchesClass && matchesCat;
                         })
                         .map(p => (
                         <option key={p.dez_id} value={p.desigz || ''}>{p.desigz}</option>
