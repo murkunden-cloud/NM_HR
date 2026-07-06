@@ -20,6 +20,10 @@ export async function POST(request: Request) {
         full_name: body.full_name,
         password_hash: hashPassword(body.password || 'password123'),
         role: body.role || 'EMPLOYEE',
+        zonenm: body.zonenm || null,
+        circl: body.circl || null,
+        divnm: body.divnm || null,
+        subdnm: body.subdnm || null,
       }
     });
     return NextResponse.json(newUser, { status: 201 });

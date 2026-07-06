@@ -14,8 +14,10 @@ model User {
   password_hash String
   full_name     String?
   role          String
+  zonenm        String?
   circl         String?
   divnm         String?
+  subdnm        String?
   permissions   String? // JSON string array of page navigations
 }
 

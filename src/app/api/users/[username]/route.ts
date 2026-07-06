@@ -10,6 +10,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ user
     const updateData: any = {
       full_name: body.full_name,
       role: body.role,
+      zonenm: body.zonenm,
+      circl: body.circl,
+      divnm: body.divnm,
+      subdnm: body.subdnm,
     };
 
     if (body.password) {

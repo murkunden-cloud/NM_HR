@@ -6,6 +6,10 @@ interface User {
   username: string;
   full_name: string | null;
   role: string;
+  zonenm?: string | null;
+  circl?: string | null;
+  divnm?: string | null;
+  subdnm?: string | null;
 }
 
 export default function UserManagementView() {
@@ -22,6 +26,34 @@ export default function UserManagementView() {
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('EMPLOYEE');
+  
+  const [zonenm, setZonenm] = useState('');
+  const [circl, setCircl] = useState('');
+  const [divnm, setDivnm] = useState('');
+  const [subdnm, setSubdnm] = useState('');
+
+  const handleFetchEmployee = async () => {
+    if (!username) return;
+    try {
+      const res = await fetch(`/api/employees?empno=${username}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.employee) {
+          const emp = data.employee;
+          setFullName(emp.empnm || '');
+          setZonenm(emp.zonenm || '');
+          setCircl(emp.circl || '');
+          setDivnm(emp.divnm || '');
+          setSubdnm(emp.subdnm || '');
+        } else {
+          alert('Employee not found in Master Employees.');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error fetching employee');
+    }
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -50,6 +82,10 @@ export default function UserManagementView() {
     setFullName('');
     setPassword('');
     setRole('EMPLOYEE');
+    setZonenm('');
+    setCircl('');
+    setDivnm('');
+    setSubdnm('');
     setIsModalOpen(true);
   };
 
@@ -60,6 +96,10 @@ export default function UserManagementView() {
     setFullName(u.full_name || '');
     setPassword(''); // don't load hash, just leave blank unless they want to reset
     setRole(u.role);
+    setZonenm(u.zonenm || '');
+    setCircl(u.circl || '');
+    setDivnm(u.divnm || '');
+    setSubdnm(u.subdnm || '');
     setIsModalOpen(true);
   };
 
@@ -86,6 +126,7 @@ export default function UserManagementView() {
           body: JSON.stringify({
             full_name: fullName,
             role,
+            zonenm, circl, divnm, subdnm,
             ...(password ? { password } : {})
           })
         });
@@ -103,6 +144,7 @@ export default function UserManagementView() {
             username,
             full_name: fullName,
             role,
+            zonenm, circl, divnm, subdnm,
             password
           })
         });
@@ -183,14 +225,21 @@ export default function UserManagementView() {
             </h3>
             
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>Username</label>
-              <input 
-                type="text" 
-                value={username} 
-                onChange={(e) => setUsername(e.target.value)} 
-                disabled={editMode}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
-              />
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>Username (CPF No)</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input 
+                  type="text" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                  disabled={editMode}
+                  style={{ flex: 1, padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
+                />
+                {!editMode && (
+                  <button type="button" onClick={handleFetchEmployee} style={{ padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.25rem', border: 'none', cursor: 'pointer' }}>
+                    Fetch
+                  </button>
+                )}
+              </div>
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
@@ -213,6 +262,27 @@ export default function UserManagementView() {
                 onChange={(e) => setPassword(e.target.value)} 
                 style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
               />
+            </div>
+
+            <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Zone</label>
+                <input type="text" value={zonenm} onChange={e => setZonenm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Circle</label>
+                <input type="text" value={circl} onChange={e => setCircl(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
+              </div>
+            </div>
+            <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Division</label>
+                <input type="text" value={divnm} onChange={e => setDivnm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Sub-Division</label>
+                <input type="text" value={subdnm} onChange={e => setSubdnm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
+              </div>
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>

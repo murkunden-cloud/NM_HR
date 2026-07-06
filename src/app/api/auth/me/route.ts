@@ -48,6 +48,11 @@ export async function GET() {
         username: user.username,
         full_name: user.full_name,
         role: user.role,
+        zonenm: user.zonenm,
+        circl: user.circl,
+        divnm: user.divnm,
+        subdnm: user.subdnm,
+        permissions: user.permissions
       },
       employee: employee || null,
       leaves: leaves

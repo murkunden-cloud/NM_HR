@@ -1,0 +1,52 @@
+=========================================================
+          NM_HR PROJECT - LAUNCH INSTRUCTIONS
+=========================================================
+
+1. LIVE CLOUD DEPLOYMENT (Vercel)
+---------------------------------------------------------
+This is your live, production website that anyone on the internet can access.
+URL: https://nm-hr-smoky.vercel.app
+How to use: Simply open the URL in any web browser on your phone or computer.
+Database: Connected to your live Supabase remote database.
+
+
+2. LOCAL DEVELOPMENT MODE
+---------------------------------------------------------
+This is the mode you use when you are actively coding and testing changes. It updates instantly when you save a file.
+How to start:
+  1. Open your terminal in the project folder (d:\MYPRO\pzhr_web)
+  2. Run the command: npm run dev
+  3. Open your browser and go to: http://localhost:3001
+Database: Connected to your Supabase remote database (via .env file).
+
+
+3. LOCAL PRODUCTION MODE
+---------------------------------------------------------
+This runs the highly optimized, compiled version of your app on your local machine (similar to how Vercel runs it).
+How to start:
+  1. Open your terminal in the project folder.
+  2. Run the command: npm run build
+  3. Once built, run the command: npm run start
+  4. Open your browser and go to: http://localhost:3001
+
+
+4. WINDOWS BATCH SCRIPTS (Local Auto-Launch)
+---------------------------------------------------------
+Your project folder contains several Windows batch scripts created for easy launching without typing commands:
+- start_prod.bat: Double-click this to automatically build and start the production server.
+- Launch_PZHR.bat: Another quick-launch script.
+How to use: Just double-click the .bat file in your Windows File Explorer!
+
+
+=========================================================
+          LOGIN CREDENTIALS (Supabase Database)
+=========================================================
+Admin Access:
+- Username: admin
+- Password: admin123
+
+Employee Access:
+- Username: employee
+- Password: employee123
+
+(To reset or re-seed these users, visit your /api/auth/seed route)
