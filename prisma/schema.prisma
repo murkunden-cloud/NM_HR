@@ -261,3 +261,36 @@ model SanctionedPost {
   @@unique([circle, division, designation, sanctionType, caste])
   @@map("sanctioned_posts")
 }
+
+model TransferOut {
+  key         String @id
+  orgname     String
+  designation String
+  count       Int    @default(0)
+
+  @@map("transfers_out")
+}
+
+model TransferInPool {
+  designation String @id
+  count       Int    @default(0)
+
+  @@map("transfers_in_pool")
+}
+
+model TransferInDeployed {
+  key         String @id
+  orgname     String
+  designation String
+  count       Int    @default(0)
+
+  @@map("transfers_in_deployed")
+}
+
+model LocationMapping {
+  unmatched_orgname String @id
+  target_orgname    String
+  created_at        String
+
+  @@map("location_mappings")
+}
