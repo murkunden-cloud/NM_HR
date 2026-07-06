@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import RosterView from '@/components/Roster/RosterView';
 import VacancyView from '@/components/Vacancy/Vacancy';
 import UserManagementView from '@/components/Users/UserManagementView';
@@ -134,6 +135,10 @@ type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 
 export default function AdminWorkspace() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  
+  // Excel Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   
   // Database States
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -638,6 +643,90 @@ export default function AdminWorkspace() {
     setNewTransType(trans.transfer_type || 'Internal');
   };
 
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingExcel(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        if (!data || data.length === 0) {
+          alert('No data found in Excel file.');
+          setIsUploadingExcel(false);
+          return;
+        }
+
+        // Map to API format. Assuming headers exactly match the Prisma schema.
+        // We ensure empno is always string.
+        const bulkPayload = data
+          .map((row: any) => {
+            const rowEmpno = row.empno || row.EMPNO || row.EmpNo || row['Employee No'];
+            if (!rowEmpno) return null; // Skip invalid rows
+            
+            // We just pass the row exactly as read. The API's update query will update any matching fields.
+            // But let's only pick string properties or convert numbers to strings except for known float/int fields.
+            // To be safe, we just pass row without empno.
+            const empData = { ...row };
+            delete empData.empno;
+            delete empData.EMPNO;
+            delete empData.EmpNo;
+            delete empData['Employee No'];
+
+            // Clean up potentially problematic fields from Excel
+            Object.keys(empData).forEach(key => {
+              if (empData[key] === null || empData[key] === undefined || empData[key] === '') {
+                delete empData[key];
+              }
+            });
+
+            return {
+              empno: String(rowEmpno),
+              data: empData
+            };
+          })
+          .filter(Boolean);
+
+        if (bulkPayload.length === 0) {
+          alert('No valid rows found. Please ensure there is a column named "empno" or "Employee No".');
+          setIsUploadingExcel(false);
+          return;
+        }
+
+        // Send to API
+        const response = await fetch('/api/employees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bulk: bulkPayload })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          alert(`Successfully updated ${result.count} employee records!`);
+          // optionally refresh current view
+          handleSearch();
+        } else {
+          alert('Error updating employees: ' + (result.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error processing Excel file:', error);
+        alert('Failed to process Excel file.');
+      } finally {
+        setIsUploadingExcel(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const handleSignOut = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -1128,7 +1217,25 @@ export default function AdminWorkspace() {
                 
                 {/* Left side: Directory list */}
                 <div className="directory-list-panel">
-                  <h3>Employees Directory ({employees.length} shown)</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h3 style={{ margin: 0 }}>Employees Directory ({employees.length} shown)</h3>
+                    <div>
+                      <input 
+                        type="file" 
+                        accept=".xlsx, .xls" 
+                        ref={fileInputRef}
+                        style={{ display: 'none' }}
+                        onChange={handleExcelUpload}
+                      />
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingExcel}
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#10b981', border: 'none', borderRadius: '0.25rem', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        {isUploadingExcel ? 'Uploading...' : '📁 Bulk Update (Excel)'}
+                      </button>
+                    </div>
+                  </div>
                   <div className="employee-table-scroll">
                     <table className="workspace-table">
                       <thead>

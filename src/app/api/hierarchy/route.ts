@@ -7,13 +7,19 @@ export async function GET() {
       select: {
         zonenm: true,
         circl: true,
-        divnm: true
+        divnm: true,
+        subdnm: true,
+        sectionm: true,
+        substnm: true
       },
-      distinct: ['zonenm', 'circl', 'divnm'],
+      distinct: ['zonenm', 'circl', 'divnm', 'subdnm', 'sectionm', 'substnm'],
       orderBy: [
         { zonenm: 'asc' },
         { circl: 'asc' },
-        { divnm: 'asc' }
+        { divnm: 'asc' },
+        { subdnm: 'asc' },
+        { sectionm: 'asc' },
+        { substnm: 'asc' }
       ]
     });
 
@@ -23,15 +29,27 @@ export async function GET() {
       const z = r.zonenm || 'Unknown Zone';
       const c = r.circl || 'Unknown Circle';
       const d = r.divnm || 'Unknown Division';
+      const sd = r.subdnm || 'Unknown Subdivision';
+      const sec = r.sectionm || 'Unknown Section';
+      const sub = r.substnm || 'Unknown Substation';
 
       if (!hierarchy[z]) {
         hierarchy[z] = { name: z, circles: {} };
       }
       if (!hierarchy[z].circles[c]) {
-        hierarchy[z].circles[c] = { name: c, divisions: [] };
+        hierarchy[z].circles[c] = { name: c, divisions: {} };
       }
-      if (!hierarchy[z].circles[c].divisions.includes(d)) {
-        hierarchy[z].circles[c].divisions.push(d);
+      if (!hierarchy[z].circles[c].divisions[d]) {
+        hierarchy[z].circles[c].divisions[d] = { name: d, subdivisions: {} };
+      }
+      if (!hierarchy[z].circles[c].divisions[d].subdivisions[sd]) {
+        hierarchy[z].circles[c].divisions[d].subdivisions[sd] = { name: sd, sections: {} };
+      }
+      if (!hierarchy[z].circles[c].divisions[d].subdivisions[sd].sections[sec]) {
+        hierarchy[z].circles[c].divisions[d].subdivisions[sd].sections[sec] = { name: sec, substations: [] };
+      }
+      if (!hierarchy[z].circles[c].divisions[d].subdivisions[sd].sections[sec].substations.includes(sub)) {
+        hierarchy[z].circles[c].divisions[d].subdivisions[sd].sections[sec].substations.push(sub);
       }
     });
 

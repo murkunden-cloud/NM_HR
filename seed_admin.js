@@ -8,8 +8,9 @@ function hashPassword(password) {
 }
 
 async function main() {
+  require('dotenv').config({ path: '.env.local' });
   const client = new Client({
-    connectionString: 'postgresql://postgres:postgres@localhost:5432/pzhr?schema=public'
+    connectionString: process.env.DATABASE_URL
   });
   
   await client.connect();

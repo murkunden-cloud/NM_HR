@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import EmployeePortal from '../login/EmployeePortal';
 import './dashboard.css';
 
 interface UserInfo {
@@ -33,6 +34,7 @@ interface LeaveRecord {
 export default function EmployeeDashboard() {
   const router = useRouter();
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'profile' | 'search'>('profile');
   
   const [user, setUser] = useState<UserInfo | null>(null);
   const [employee, setEmployee] = useState<EmployeeInfo | null>(null);
@@ -144,13 +146,30 @@ export default function EmployeeDashboard() {
         </button>
       </header>
 
-      {/* Unlinked Profile Warning */}
-      {isUnlinkedAdmin && (
-        <div style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', border: '1px solid #ffeeba' }}>
-          <strong>Notice:</strong> You are logged in as an Admin user, but there is no matching Employee record for your username (<strong>{user?.username}</strong>). 
-          The dashboard below is showing fallback sample data. To see a real dashboard, please log in with a normal Employee account (e.g., using their Employee Number).
-        </div>
-      )}
+      <div className="dashboard-tabs" style={{ display: 'flex', gap: '20px', padding: '0 40px', marginBottom: '20px', borderBottom: '1px solid #e2e8f0' }}>
+        <button 
+          onClick={() => setActiveTab('profile')}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'profile' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'profile' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+        >
+          My Profile
+        </button>
+        <button 
+          onClick={() => setActiveTab('search')}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'search' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'search' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+        >
+          Organization Search
+        </button>
+      </div>
+
+      {activeTab === 'profile' ? (
+        <>
+          {/* Unlinked Profile Warning */}
+          {isUnlinkedAdmin && (
+            <div style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', border: '1px solid #ffeeba', margin: '0 40px' }}>
+              <strong>Notice:</strong> You are logged in as an Admin user, but there is no matching Employee record for your username (<strong>{user?.username}</strong>). 
+              The dashboard below is showing fallback sample data. To see a real dashboard, please log in with a normal Employee account (e.g., using their Employee Number).
+            </div>
+          )}
 
       {/* Stats Grid */}
       <section className="stats-grid">
@@ -297,6 +316,14 @@ export default function EmployeeDashboard() {
           </div>
         </aside>
       </div>
+        </>
+      ) : (
+        <div style={{ padding: '0 40px', height: 'calc(100vh - 180px)', marginBottom: '40px' }}>
+          <div style={{ background: '#0f172a', borderRadius: '16px', height: '100%', overflow: 'hidden', padding: '20px', position: 'relative' }}>
+            <EmployeePortal />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
