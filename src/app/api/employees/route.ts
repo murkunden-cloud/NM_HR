@@ -74,18 +74,35 @@ export async function POST(request: Request) {
     if (body.bulk && Array.isArray(body.bulk)) {
       // Bulk update logic
       const results = [];
+      const errors = [];
       for (const item of body.bulk) {
         if (item.empno && item.data) {
-          const updated = await prisma.employee.update({
-            where: { empno: item.empno },
-            data: {
-              ...item.data
-            }
-          });
-          results.push(updated);
+          try {
+            // Convert any numeric fields correctly if needed or let Prisma handle it 
+            // since we already passed strings/numbers.
+            // Using upsert to safely create new employees or update existing ones.
+            const updated = await prisma.employee.upsert({
+              where: { empno: item.empno },
+              update: {
+                ...item.data
+              },
+              create: {
+                empno: item.empno,
+                ...item.data
+              }
+            });
+            results.push(updated);
+          } catch (err) {
+            console.error(`Error updating empno ${item.empno}:`, err);
+            errors.push(item.empno);
+          }
         }
       }
-      return NextResponse.json({ success: true, count: results.length });
+      return NextResponse.json({ 
+        success: true, 
+        count: results.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
     }
 
     const { empno, data } = body;
