@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import './login.css';
-import EmployeePortal from './EmployeePortal';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -85,9 +84,8 @@ export default function LoginPage() {
       <div className="ambient-blob blob-1"></div>
       <div className="ambient-blob blob-2"></div>
 
-      {portal === 'admin' ? (
-        <>
-          {/* Left Panel: Hero Branding & Stats (Hidden on smaller screens via CSS) */}
+      <>
+        {/* Left Panel: Hero Branding & Stats (Hidden on smaller screens via CSS) */}
           <div className="login-hero">
             <div className="hero-header">
               <div className="logo-icon">P</div>
@@ -158,14 +156,14 @@ export default function LoginPage() {
                 <div className={`toggle-slider ${portal}`} />
                 <button
                   type="button"
-                  className="toggle-button"
+                  className={`toggle-button ${portal === 'employee' ? 'active' : ''}`}
                   onClick={() => setPortal('employee')}
                 >
                   Employee Portal
                 </button>
                 <button
                   type="button"
-                  className="toggle-button active"
+                  className={`toggle-button ${portal === 'admin' ? 'active' : ''}`}
                   onClick={() => setPortal('admin')}
                 >
                   Admin Portal
@@ -318,34 +316,6 @@ export default function LoginPage() {
             </div>
           </div>
         </>
-      ) : (
-        <div style={{ zIndex: 10, display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: '100vh', boxSizing: 'border-box' }}>
-          <div style={{ padding: '20px', display: 'flex', justifyContent: 'center' }}>
-            {/* Employee/Admin Segmented Control */}
-            <div className="portal-toggle" style={{ margin: 0, width: '400px', maxWidth: '90%', background: 'white' }}>
-              <div className={`toggle-slider ${portal}`} />
-              <button
-                type="button"
-                className="toggle-button active"
-                onClick={() => setPortal('employee')}
-              >
-                Employee Portal
-              </button>
-              <button
-                type="button"
-                className="toggle-button"
-                onClick={() => setPortal('admin')}
-              >
-                Admin Portal
-              </button>
-            </div>
-          </div>
-          
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-             <EmployeePortal />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
