@@ -16,6 +16,8 @@ interface Employee {
   desigz: string | null;
   locnm: string | null;
   divnm: string | null;
+  zonenm?: string | null;
+  circl?: string | null;
   basic: number;
   payscl: string | null;
   compjoindt: string | null;
@@ -152,7 +154,7 @@ export default function AdminWorkspace() {
   const [retCOMDays, setRetCOMDays] = useState('180');
   
   // Sub-tab selection state inside Employee Master detail panel
-  const [subTab, setSubTab] = useState<'biodata' | 'service' | 'increment' | 'career'>('biodata');
+  const [subTab, setSubTab] = useState<'biodata' | 'service' | 'increment' | 'career' | 'location'>('biodata');
 
   // Sub-table transaction states
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
@@ -1285,7 +1287,84 @@ export default function AdminWorkspace() {
                         <button className={`sub-tab-btn ${subTab === 'service' ? 'active' : ''}`} onClick={() => setSubTab('service')}>Service & Deemed</button>
                         <button className={`sub-tab-btn ${subTab === 'increment' ? 'active' : ''}`} onClick={() => setSubTab('increment')}>Increments</button>
                         <button className={`sub-tab-btn ${subTab === 'career' ? 'active' : ''}`} onClick={() => setSubTab('career')}>Career Logs</button>
+                        <button className={`sub-tab-btn ${subTab === 'location' ? 'active' : ''}`} onClick={() => setSubTab('location')}>Current Location</button>
                       </div>
+
+                      {/* SUB TAB LOCATION: CURRENT LOCATION */}
+                      {subTab === 'location' && (
+                        <div className="form-grid-col2 animate-fade">
+                          <div className="form-group" style={{ gridColumn: 'span 2', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.25rem', marginBottom: '0.25rem' }}>
+                            <h5 style={{ margin: '0 0 0.25rem 0', color: 'var(--primary-accent)' }}>Current Posting Location</h5>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Zone</label>
+                            <select 
+                              value={selectedEmp.zonenm || ''} 
+                              onChange={(e) => setSelectedEmp({ ...selectedEmp, zonenm: e.target.value })}
+                              style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
+                            >
+                              <option value="">-- Select Zone --</option>
+                              <option value="HQ">HQ</option>
+                              <option value="Pune Zone">Pune Zone</option>
+                              <option value="Kalyan Zone">Kalyan Zone</option>
+                              <option value="Nagpur Zone">Nagpur Zone</option>
+                              <option value="Nashik Zone">Nashik Zone</option>
+                              <option value="Aurangabad Zone">Aurangabad Zone</option>
+                            </select>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Circle</label>
+                            <select 
+                              value={selectedEmp.circl || ''} 
+                              onChange={(e) => setSelectedEmp({ ...selectedEmp, circl: e.target.value })}
+                              style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
+                            >
+                              <option value="">-- Select Circle --</option>
+                              <option value="Circle 1">Circle 1</option>
+                              <option value="Circle 2">Circle 2</option>
+                              <option value="Urban Circle">Urban Circle</option>
+                              <option value="Rural Circle">Rural Circle</option>
+                            </select>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Division</label>
+                            <select 
+                              value={selectedEmp.divnm || ''} 
+                              onChange={(e) => setSelectedEmp({ ...selectedEmp, divnm: e.target.value })}
+                              style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
+                            >
+                              <option value="">-- Select Division --</option>
+                              <option value="O&M">O&M</option>
+                              <option value="Projects">Projects</option>
+                              <option value="Testing">Testing</option>
+                              <option value="HR">HR</option>
+                              <option value="Finance">Finance</option>
+                              <option value="IT">IT</option>
+                            </select>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Location Code / Name</label>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
+                              <input 
+                                type="text" 
+                                value={selectedEmp.loccode || ''} 
+                                onChange={(e) => setSelectedEmp({ ...selectedEmp, loccode: e.target.value })} 
+                                placeholder="e.g. LOC101 (Code)"
+                              />
+                              <input 
+                                type="text" 
+                                value={selectedEmp.locnm || ''} 
+                                onChange={(e) => setSelectedEmp({ ...selectedEmp, locnm: e.target.value })} 
+                                placeholder="e.g. Main Office Building (Name)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* SUB TAB 1: BIODATA & STAY */}
                       {subTab === 'biodata' && (

@@ -7,7 +7,7 @@ import './login.css';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [portal, setPortal] = useState<'employee' | 'admin'>('employee');
+  const [portal, setPortal] = useState<'employee' | 'admin'>('admin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -94,10 +94,10 @@ export default function LoginPage() {
 
             <div className="hero-body">
               <h1 className="hero-title">
-                The future of HR <br />& Payroll is here.
+                Program Owner Details
               </h1>
               <p className="hero-description">
-                Streamline your workforce, automate accurate payroll calculation, and gain powerful employee insights within a single unified workspace.
+                This HRMS program was created because the existing system was not handy for all employees. I have built this unified workspace to provide a better, more streamlined experience for everyone.
               </p>
 
               {/* Glassmorphic Stats Display */}
@@ -298,8 +298,17 @@ export default function LoginPage() {
                 </button>
               </form>
 
+              {/* Credentials Hint */}
+              <div className="credentials-hint" style={{ marginTop: '20px', padding: '10px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)' }}>
+                {portal === 'employee' ? (
+                  <p style={{ margin: 0 }}><strong>Employee Portal:</strong> Use Username: <strong>guest</strong> and Password: <strong>guest1</strong></p>
+                ) : (
+                  <p style={{ margin: 0 }}><strong>Admin Portal:</strong> Please ask me on my mobile number to create an admin user.</p>
+                )}
+              </div>
+
               {/* Form Footer */}
-              <div className="form-footer">
+              <div className="form-footer" style={{ marginTop: '15px' }}>
                 Don&apos;t have an account?{' '}
                 <a href="#" className="form-footer-link" onClick={(e) => e.preventDefault()}>
                   Contact HR
