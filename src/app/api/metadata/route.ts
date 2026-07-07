@@ -24,17 +24,17 @@ export async function GET() {
     });
 
     const uniqueZones = await prisma.employee.findMany({
-      where: { zonenm: { not: null, not: '' } },
+      where: { zonenm: { not: null, notIn: [''] } },
       distinct: ['zonenm'],
       select: { zonenm: true }
     });
     const uniqueCircles = await prisma.employee.findMany({
-      where: { circl: { not: null, not: '' } },
+      where: { circl: { not: null, notIn: [''] } },
       distinct: ['circl'],
       select: { circl: true }
     });
     const uniqueDivisions = await prisma.employee.findMany({
-      where: { divnm: { not: null, not: '' } },
+      where: { divnm: { not: null, notIn: [''] } },
       distinct: ['divnm'],
       select: { divnm: true }
     });
