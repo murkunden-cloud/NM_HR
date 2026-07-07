@@ -145,6 +145,9 @@ export default function AdminWorkspace() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
+  const [allZones, setAllZones] = useState<string[]>([]);
+  const [allCircles, setAllCircles] = useState<string[]>([]);
+  const [allDivisions, setAllDivisions] = useState<string[]>([]);
   const [biodataPrintMode, setBiodataPrintMode] = useState(false);
   const [retirementPrintMode, setRetirementPrintMode] = useState(false);
   const [retLAPDays, setRetLAPDays] = useState('300');
@@ -256,6 +259,9 @@ export default function AdminWorkspace() {
           setLocations(data.locations || []);
           setDesignations(data.designations || []);
           setPosts(data.posts || []);
+          setAllZones(data.zones || []);
+          setAllCircles(data.circles || []);
+          setAllDivisions(data.divisions || []);
         }
 
         // Fetch hierarchy list for Seniority tool
@@ -1203,7 +1209,7 @@ export default function AdminWorkspace() {
                               style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
                             >
                               <option value="">-- Select Zone --</option>
-                              {Array.from(new Set(employees.map(e => e.zonenm).filter(Boolean))).sort().map(z => (
+                              {allZones.map(z => (
                                 <option key={z} value={z}>{z}</option>
                               ))}
                             </select>
@@ -1217,7 +1223,7 @@ export default function AdminWorkspace() {
                               style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
                             >
                               <option value="">-- Select Circle --</option>
-                              {Array.from(new Set(employees.map(e => e.circl).filter(Boolean))).sort().map(c => (
+                              {allCircles.map(c => (
                                 <option key={c} value={c}>{c}</option>
                               ))}
                             </select>
@@ -1231,7 +1237,7 @@ export default function AdminWorkspace() {
                               style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
                             >
                               <option value="">-- Select Division --</option>
-                              {Array.from(new Set(employees.map(e => e.divnm).filter(Boolean))).sort().map(d => (
+                              {allDivisions.map(d => (
                                 <option key={d} value={d}>{d}</option>
                               ))}
                             </select>

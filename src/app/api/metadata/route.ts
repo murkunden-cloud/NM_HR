@@ -23,11 +23,30 @@ export async function GET() {
       ]
     });
 
+    const uniqueZones = await prisma.employee.findMany({
+      where: { zonenm: { not: null, not: '' } },
+      distinct: ['zonenm'],
+      select: { zonenm: true }
+    });
+    const uniqueCircles = await prisma.employee.findMany({
+      where: { circl: { not: null, not: '' } },
+      distinct: ['circl'],
+      select: { circl: true }
+    });
+    const uniqueDivisions = await prisma.employee.findMany({
+      where: { divnm: { not: null, not: '' } },
+      distinct: ['divnm'],
+      select: { divnm: true }
+    });
+
     return NextResponse.json({
       success: true,
       locations,
       designations,
-      posts
+      posts,
+      zones: uniqueZones.map((z: any) => z.zonenm).filter(Boolean).sort(),
+      circles: uniqueCircles.map((c: any) => c.circl).filter(Boolean).sort(),
+      divisions: uniqueDivisions.map((d: any) => d.divnm).filter(Boolean).sort()
     });
   } catch (error) {
     console.error('API Metadata GET error:', error);
