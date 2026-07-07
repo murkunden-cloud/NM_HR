@@ -312,6 +312,25 @@ export default function AdminWorkspace() {
     }
   };
 
+  const fetchEmployeesByScope = async (key: string, value?: string) => {
+    setLoading(true);
+    try {
+      let url = '/api/employees?limit=50';
+      if (key !== 'all' && value) {
+        url += `&${key}=${encodeURIComponent(value)}`;
+      }
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setEmployees(data.employees || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGenerateSeniority = async () => {
     if (!seniorityPost || !seniorityCircle) return;
     setSeniorityLoading(true);
@@ -1157,6 +1176,56 @@ export default function AdminWorkspace() {
                     <h3 style={{ margin: 0 }}>Employees Directory ({employees.length} shown)</h3>
                     <ExcelUpload onUploadComplete={handleSearch} />
                   </div>
+
+                  {/* Scope Hierarchy Filters */}
+                  {currentUser && (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '15px', flexWrap: 'wrap', padding: '10px', background: 'rgba(15,23,42,0.4)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#cbd5e1', alignSelf: 'center', marginRight: '5px' }}>📍 Filter by Your Scope:</span>
+                      
+                      <button 
+                        onClick={() => fetchEmployeesByScope('all')}
+                        className="btn-ghost"
+                        style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
+                        All My Scope
+                      </button>
+
+                      {currentUser.zonenm && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('zonenm', currentUser.zonenm)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Zone: {currentUser.zonenm}
+                        </button>
+                      )}
+                      
+                      {currentUser.circl && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('circl', currentUser.circl)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Circle: {currentUser.circl}
+                        </button>
+                      )}
+                      
+                      {currentUser.divnm && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('divnm', currentUser.divnm)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Division: {currentUser.divnm}
+                        </button>
+                      )}
+                      
+                      {currentUser.subdnm && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('subdnm', currentUser.subdnm)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Sub Div: {currentUser.subdnm}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="employee-table-scroll">
                     <table className="workspace-table">
                       <thead>

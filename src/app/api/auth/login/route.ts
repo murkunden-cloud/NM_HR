@@ -37,7 +37,14 @@ export async function POST(request: Request) {
     }
 
     // 4. Role Authorization matching Portal type
-    const isAdminRole = user.role.toLowerCase().includes('admin') || user.role === 'ADMIN';
+    let isAdminRole = user.role.toLowerCase().includes('admin') || user.role === 'ADMIN';
+    
+    // Grant global admin to program owners and future super admins
+    const isSuperAdmin = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    if (isSuperAdmin) {
+      isAdminRole = true;
+    }
+
     if (portal === 'admin' && !isAdminRole) {
       return NextResponse.json({ 
         success: false, 
@@ -68,7 +75,8 @@ export async function POST(request: Request) {
     }
 
     // 6. Generate Session Token
-    const sessionToken = createSessionToken(user.username, user.role);
+    const sessionRole = isSuperAdmin ? 'ADMIN' : user.role;
+    const sessionToken = createSessionToken(user.username, sessionRole);
 
     if (user.role === 'GUEST') {
       await prisma.guestSession.create({
@@ -87,7 +95,7 @@ export async function POST(request: Request) {
       user: {
         username: user.username,
         full_name: user.full_name,
-        role: user.role
+        role: sessionRole
       }
     });
 

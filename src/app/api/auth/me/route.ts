@@ -42,16 +42,19 @@ export async function GET() {
       });
     }
 
+    const isSuperAdmin = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    const userRole = isSuperAdmin ? 'ADMIN' : user.role;
+
     return NextResponse.json({
       success: true,
       user: {
         username: user.username,
         full_name: user.full_name,
-        role: user.role,
-        zonenm: user.zonenm,
-        circl: user.circl,
-        divnm: user.divnm,
-        subdnm: user.subdnm,
+        role: userRole,
+        zonenm: isSuperAdmin ? null : user.zonenm,
+        circl: isSuperAdmin ? null : user.circl,
+        divnm: isSuperAdmin ? null : user.divnm,
+        subdnm: isSuperAdmin ? null : user.subdnm,
         permissions: user.permissions
       },
       employee: employee || null,

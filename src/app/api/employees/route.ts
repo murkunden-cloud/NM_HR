@@ -6,19 +6,22 @@ import { verifySessionToken } from '@/lib/auth';
 export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get('pz_token')?.value;
+    const token = cookieStore.get('pzhr_session')?.value;
     if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     const session = await verifySessionToken(token);
     if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const user = await prisma.user.findUnique({ where: { username: session.username } });
+    const user = await prisma.user.findUnique({ where: { username: session.sub } });
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     const scopeFilter: any = {};
-    if (user.zonenm) scopeFilter.zonenm = user.zonenm;
-    if (user.circl) scopeFilter.circl = user.circl;
-    if (user.divnm) scopeFilter.divnm = user.divnm;
-    if (user.subdnm) scopeFilter.subdnm = user.subdnm;
+    const isAdminAccount = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    if (!isAdminAccount) {
+      if (user.zonenm) scopeFilter.zonenm = user.zonenm;
+      if (user.circl) scopeFilter.circl = user.circl;
+      if (user.divnm) scopeFilter.divnm = user.divnm;
+      if (user.subdnm) scopeFilter.subdnm = user.subdnm;
+    }
 
     const url = new URL(request.url);
     const empno = url.searchParams.get('empno');
@@ -32,6 +35,16 @@ export async function GET(request: Request) {
 
     // 1. Fetch single employee by empno
     if (empno) {
+      if (!isAdminAccount) {
+        const superAdmins = await prisma.user.findMany({
+          where: { role: 'SUPER_ADMIN' },
+          select: { username: true }
+        });
+        const hiddenIds = ['2266083', '2232590', ...superAdmins.map((u: any) => u.username)];
+        if (hiddenIds.includes(empno)) {
+          return NextResponse.json({ success: false, error: 'Employee not found' }, { status: 404 });
+        }
+      }
       const employee = await prisma.employee.findFirst({
         where: { empno, ...scopeFilter }
       });
@@ -41,11 +54,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, employee });
     }
 
+    const baseWhere: any = {
+      ...scopeFilter
+    };
+
+    if (!isAdminAccount) {
+      const superAdmins = await prisma.user.findMany({
+        where: { role: 'SUPER_ADMIN' },
+        select: { username: true }
+      });
+      const hiddenIds = ['2266083', '2232590', ...superAdmins.map((u: any) => u.username)];
+      baseWhere.empno = { notIn: hiddenIds };
+    }
+
     // 2. Filter by explicit fields (for Seniority)
     if (loccode || desigz || zonenm || circl || divnm) {
       const employees = await prisma.employee.findMany({
         where: {
-          ...scopeFilter,
+          ...baseWhere,
           ...(loccode ? { loccode } : {}),
           ...(zonenm ? { zonenm } : {}),
           ...(circl ? { circl } : {}),
@@ -62,7 +88,7 @@ export async function GET(request: Request) {
       const trimmed = query.trim();
       const employees = await prisma.employee.findMany({
         where: {
-          ...scopeFilter,
+          ...baseWhere,
           OR: [
             { empno: { contains: trimmed, mode: 'insensitive' } },
             { empnm: { contains: trimmed, mode: 'insensitive' } },
@@ -76,7 +102,7 @@ export async function GET(request: Request) {
 
     // 4. Get recent employees as default list
     const employees = await prisma.employee.findMany({
-      where: scopeFilter,
+      where: baseWhere,
       take: limit,
       orderBy: { empno: 'asc' }
     });
@@ -90,6 +116,24 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('pzhr_session')?.value;
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const session = await verifySessionToken(token);
+    if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const user = await prisma.user.findUnique({ where: { username: session.sub } });
+    if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const isAdminAccount = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    const scopeFilter: any = {};
+    if (!isAdminAccount) {
+      if (user.zonenm) scopeFilter.zonenm = user.zonenm;
+      if (user.circl) scopeFilter.circl = user.circl;
+      if (user.divnm) scopeFilter.divnm = user.divnm;
+      if (user.subdnm) scopeFilter.subdnm = user.subdnm;
+    }
+
     const body = await request.json();
     if (body.bulk && Array.isArray(body.bulk)) {
       // Bulk update logic
@@ -98,6 +142,17 @@ export async function POST(request: Request) {
       for (const item of body.bulk) {
         if (item.empno && item.data) {
           try {
+            // Verify scope for each item
+            if (!isAdminAccount && item.empno !== user.username) {
+              const targetEmp = await prisma.employee.findFirst({
+                where: { empno: item.empno, ...scopeFilter }
+              });
+              if (!targetEmp) {
+                errors.push(item.empno);
+                continue;
+              }
+            }
+
             // Convert any numeric fields correctly if needed or let Prisma handle it 
             // since we already passed strings/numbers.
             // Using upsert to safely create new employees or update existing ones.
@@ -132,6 +187,16 @@ export async function POST(request: Request) {
     }
 
     // Clean data fields if needed before updating
+    // First verify if the employee being updated is within the admin's scope or is the admin themselves
+    if (!isAdminAccount && empno !== user.username) {
+      const targetEmp = await prisma.employee.findFirst({
+        where: { empno, ...scopeFilter }
+      });
+      if (!targetEmp) {
+        return NextResponse.json({ success: false, error: 'Forbidden: Employee not in your scope' }, { status: 403 });
+      }
+    }
+
     const updatedEmployee = await prisma.employee.update({
       where: { empno },
       data: {
