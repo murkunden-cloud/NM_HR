@@ -148,6 +148,7 @@ export default function AdminWorkspace() {
   const [allZones, setAllZones] = useState<string[]>([]);
   const [allCircles, setAllCircles] = useState<string[]>([]);
   const [allDivisions, setAllDivisions] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [biodataPrintMode, setBiodataPrintMode] = useState(false);
   const [retirementPrintMode, setRetirementPrintMode] = useState(false);
   const [retLAPDays, setRetLAPDays] = useState('300');
@@ -251,6 +252,15 @@ export default function AdminWorkspace() {
           setPayScales(data.payScales || []);
           setScalesCount(data.payScales?.length || 105);
         }
+
+        // Fetch current user
+        try {
+          const authRes = await fetch('/api/auth/me');
+          if (authRes.ok) {
+            const data = await authRes.json();
+            if (data.success && data.user) setCurrentUser(data.user);
+          }
+        } catch (e) {}
 
         // Fetch metadata dropdown lists
         const metaRes = await fetch('/api/metadata');
@@ -1048,8 +1058,8 @@ export default function AdminWorkspace() {
 
         <div className="sidebar-profile">
           <div className="profile-details">
-            <span className="profile-name">Nagesh D.M</span>
-            <span className="profile-role">Head Clerk - CPF 02266083</span>
+            <span className="profile-name">{currentUser ? currentUser.full_name || 'Admin User' : 'Loading...'}</span>
+            <span className="profile-role">CPF {currentUser ? currentUser.username : '---'}</span>
           </div>
           <button className="logout-button" onClick={handleSignOut}>Log Out</button>
         </div>
@@ -1062,7 +1072,7 @@ export default function AdminWorkspace() {
         <header className="workspace-header">
           <div>
             <h2>{activeTab.toUpperCase().replace('_', ' ')} Workspace</h2>
-            <p>Active Scope: Pune Zone HR Operations</p>
+            <p>Active Scope: {currentUser ? ([currentUser.zonenm, currentUser.circl, currentUser.divnm, currentUser.subdnm].filter(Boolean).join(' / ') || 'Global Scope') : 'Loading...'}</p>
           </div>
           <div className="header-actions">
             {activeTab === 'employees' && (
