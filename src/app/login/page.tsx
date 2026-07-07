@@ -89,12 +89,12 @@ export default function LoginPage() {
           <div className="login-hero">
             <div className="hero-header">
               <div className="logo-icon">P</div>
-              <span className="logo-text">PZHR</span>
+              <span className="logo-text">HRMS</span>
             </div>
 
             <div className="hero-body">
               <h1 className="hero-title">
-                Program Owner Details
+                Program Owner: Nagesh D.M
               </h1>
               <p className="hero-description">
                 This HRMS program was created because the existing system was not handy for all employees. I have built this unified workspace to provide a better, more streamlined experience for everyone.
@@ -139,7 +139,7 @@ export default function LoginPage() {
             </div>
 
             <div className="hero-footer">
-              &copy; {new Date().getFullYear()} PZHR Inc. All rights reserved.
+              &copy; {new Date().getFullYear()} Anaconda.HR reserved...
             </div>
           </div>
 
