@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import RosterView from '@/components/Roster/RosterView';
+import ExcelUpload from '@/components/ExcelUpload';
 import VacancyView from '@/components/Vacancy/Vacancy';
 import UserManagementView from '@/components/Users/UserManagementView';
 import './admin.css';
@@ -137,10 +138,6 @@ type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 
 export default function AdminWorkspace() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  
-  // Excel Upload State
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   
   // Database States
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -646,90 +643,6 @@ export default function AdminWorkspace() {
     setNewTransType(trans.transfer_type || 'Internal');
   };
 
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingExcel(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-        
-        if (!data || data.length === 0) {
-          alert('No data found in Excel file.');
-          setIsUploadingExcel(false);
-          return;
-        }
-
-        // Map to API format. Assuming headers exactly match the Prisma schema.
-        // We ensure empno is always string.
-        const bulkPayload = data
-          .map((row: any) => {
-            const rowEmpno = row.empno || row.EMPNO || row.EmpNo || row['Employee No'];
-            if (!rowEmpno) return null; // Skip invalid rows
-            
-            // We just pass the row exactly as read. The API's update query will update any matching fields.
-            // But let's only pick string properties or convert numbers to strings except for known float/int fields.
-            // To be safe, we just pass row without empno.
-            const empData = { ...row };
-            delete empData.empno;
-            delete empData.EMPNO;
-            delete empData.EmpNo;
-            delete empData['Employee No'];
-
-            // Clean up potentially problematic fields from Excel
-            Object.keys(empData).forEach(key => {
-              if (empData[key] === null || empData[key] === undefined || empData[key] === '') {
-                delete empData[key];
-              }
-            });
-
-            return {
-              empno: String(rowEmpno),
-              data: empData
-            };
-          })
-          .filter(Boolean);
-
-        if (bulkPayload.length === 0) {
-          alert('No valid rows found. Please ensure there is a column named "empno" or "Employee No".');
-          setIsUploadingExcel(false);
-          return;
-        }
-
-        // Send to API
-        const response = await fetch('/api/employees', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bulk: bulkPayload })
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-          alert(`Successfully updated ${result.count} employee records!`);
-          // optionally refresh current view
-          handleSearch();
-        } else {
-          alert('Error updating employees: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error processing Excel file:', error);
-        alert('Failed to process Excel file.');
-      } finally {
-        setIsUploadingExcel(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    };
-    reader.readAsBinaryString(file);
-  };
-
   const handleSignOut = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -1226,22 +1139,7 @@ export default function AdminWorkspace() {
                 <div className="directory-list-panel">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <h3 style={{ margin: 0 }}>Employees Directory ({employees.length} shown)</h3>
-                    <div>
-                      <input 
-                        type="file" 
-                        accept=".xlsx, .xls" 
-                        ref={fileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={handleExcelUpload}
-                      />
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingExcel}
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#10b981', border: 'none', borderRadius: '0.25rem', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
-                      >
-                        {isUploadingExcel ? 'Uploading...' : '📁 Bulk Update (Excel)'}
-                      </button>
-                    </div>
+                    <ExcelUpload onUploadComplete={handleSearch} />
                   </div>
                   <div className="employee-table-scroll">
                     <table className="workspace-table">
@@ -1284,10 +1182,10 @@ export default function AdminWorkspace() {
                       {/* Sub Tabs Navigation */}
                       <div className="sub-tabs-nav">
                         <button className={`sub-tab-btn ${subTab === 'biodata' ? 'active' : ''}`} onClick={() => setSubTab('biodata')}>Biodata & Stay</button>
+                        <button className={`sub-tab-btn ${subTab === 'location' ? 'active' : ''}`} onClick={() => setSubTab('location')}>Current Location</button>
                         <button className={`sub-tab-btn ${subTab === 'service' ? 'active' : ''}`} onClick={() => setSubTab('service')}>Service & Deemed</button>
                         <button className={`sub-tab-btn ${subTab === 'increment' ? 'active' : ''}`} onClick={() => setSubTab('increment')}>Increments</button>
                         <button className={`sub-tab-btn ${subTab === 'career' ? 'active' : ''}`} onClick={() => setSubTab('career')}>Career Logs</button>
-                        <button className={`sub-tab-btn ${subTab === 'location' ? 'active' : ''}`} onClick={() => setSubTab('location')}>Current Location</button>
                       </div>
 
                       {/* SUB TAB LOCATION: CURRENT LOCATION */}
@@ -1305,12 +1203,9 @@ export default function AdminWorkspace() {
                               style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
                             >
                               <option value="">-- Select Zone --</option>
-                              <option value="HQ">HQ</option>
-                              <option value="Pune Zone">Pune Zone</option>
-                              <option value="Kalyan Zone">Kalyan Zone</option>
-                              <option value="Nagpur Zone">Nagpur Zone</option>
-                              <option value="Nashik Zone">Nashik Zone</option>
-                              <option value="Aurangabad Zone">Aurangabad Zone</option>
+                              {Array.from(new Set(employees.map(e => e.zonenm).filter(Boolean))).sort().map(z => (
+                                <option key={z} value={z}>{z}</option>
+                              ))}
                             </select>
                           </div>
                           
@@ -1322,10 +1217,9 @@ export default function AdminWorkspace() {
                               style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
                             >
                               <option value="">-- Select Circle --</option>
-                              <option value="Circle 1">Circle 1</option>
-                              <option value="Circle 2">Circle 2</option>
-                              <option value="Urban Circle">Urban Circle</option>
-                              <option value="Rural Circle">Rural Circle</option>
+                              {Array.from(new Set(employees.map(e => e.circl).filter(Boolean))).sort().map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
                             </select>
                           </div>
                           
@@ -1337,12 +1231,9 @@ export default function AdminWorkspace() {
                               style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
                             >
                               <option value="">-- Select Division --</option>
-                              <option value="O&M">O&M</option>
-                              <option value="Projects">Projects</option>
-                              <option value="Testing">Testing</option>
-                              <option value="HR">HR</option>
-                              <option value="Finance">Finance</option>
-                              <option value="IT">IT</option>
+                              {Array.from(new Set(employees.map(e => e.divnm).filter(Boolean))).sort().map(d => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
                             </select>
                           </div>
                           
