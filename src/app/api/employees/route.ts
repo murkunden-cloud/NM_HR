@@ -1,8 +1,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { cookies } from 'next/headers';
+import { verifySessionToken } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('pz_token')?.value;
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const session = await verifySessionToken(token);
+    if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const user = await prisma.user.findUnique({ where: { username: session.username } });
+    if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const scopeFilter: any = {};
+    if (user.zonenm) scopeFilter.zonenm = user.zonenm;
+    if (user.circl) scopeFilter.circl = user.circl;
+    if (user.divnm) scopeFilter.divnm = user.divnm;
+    if (user.subdnm) scopeFilter.subdnm = user.subdnm;
+
     const url = new URL(request.url);
     const empno = url.searchParams.get('empno');
     const query = url.searchParams.get('query');
@@ -15,8 +32,8 @@ export async function GET(request: Request) {
 
     // 1. Fetch single employee by empno
     if (empno) {
-      const employee = await prisma.employee.findUnique({
-        where: { empno }
+      const employee = await prisma.employee.findFirst({
+        where: { empno, ...scopeFilter }
       });
       if (!employee) {
         return NextResponse.json({ success: false, error: 'Employee not found' }, { status: 404 });
@@ -28,6 +45,7 @@ export async function GET(request: Request) {
     if (loccode || desigz || zonenm || circl || divnm) {
       const employees = await prisma.employee.findMany({
         where: {
+          ...scopeFilter,
           ...(loccode ? { loccode } : {}),
           ...(zonenm ? { zonenm } : {}),
           ...(circl ? { circl } : {}),
@@ -44,6 +62,7 @@ export async function GET(request: Request) {
       const trimmed = query.trim();
       const employees = await prisma.employee.findMany({
         where: {
+          ...scopeFilter,
           OR: [
             { empno: { contains: trimmed, mode: 'insensitive' } },
             { empnm: { contains: trimmed, mode: 'insensitive' } },
@@ -57,6 +76,7 @@ export async function GET(request: Request) {
 
     // 4. Get recent employees as default list
     const employees = await prisma.employee.findMany({
+      where: scopeFilter,
       take: limit,
       orderBy: { empno: 'asc' }
     });
