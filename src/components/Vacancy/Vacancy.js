@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { api, API } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -265,6 +266,14 @@ export default function Vacancy() {
     } catch (e) { toast.error(e.response?.data?.detail || "Upload failed"); }
   };
 
+  const downloadTemplate = () => {
+    const headers = [["REGION", "ZONE", "CIRCLE", "DIVISION", "SUBDIVISION", "ORGNAME", "CADRE", "PAYGROUP", "TYPE", "DESIGNATION", "SANCTIONED", "FILLED_IN"]];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "Vacancy_Upload_Template.xlsx");
+  };
+
   const resetAll = async () => {
     try {
       const { data } = await api.delete("/transfers/reset");
@@ -300,6 +309,9 @@ export default function Vacancy() {
               <>
                 <Button onClick={() => setResetDlg(true)} className="h-11 text-base bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 font-semibold" data-testid="reset-transfers-btn">
                   <Trash2 className="w-4 h-4 mr-2" /> Reset Transfers
+                </Button>
+                <Button onClick={downloadTemplate} className="h-11 text-base bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20 font-semibold" data-testid="download-template-btn">
+                  <Download className="w-4 h-4 mr-2" /> Template
                 </Button>
                 <label className="inline-flex items-center gap-2 px-4 h-11 bg-white/10 border border-white/20 rounded-md text-base cursor-pointer hover:bg-white/20 font-semibold text-white" data-testid="upload-base-btn">
                   <Upload className="w-4 h-4" /> Replace Base

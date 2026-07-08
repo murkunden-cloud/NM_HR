@@ -1,0 +1,203 @@
+/* src/components/payslip.css */
+
+.payslip-container {
+  font-family: "Times New Roman", Times, serif;
+  font-size: 11px;
+  color: #000;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+}
+
+.payslip-outer-border {
+  border: 1px solid #000;
+}
+
+/* Header Section */
+.payslip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid #000;
+}
+
+.payslip-logo {
+  flex: 0 0 150px;
+  display: flex;
+  flex-direction: column;
+}
+
+.payslip-logo-inner {
+  display: flex;
+  align-items: center;
+}
+
+.payslip-logo-tri {
+  width: 0;
+  height: 0;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-bottom: 25px solid #d32f2f;
+  margin-right: 5px;
+}
+
+.payslip-logo h1 {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  margin: 0;
+  color: #d32f2f;
+  letter-spacing: -1px;
+}
+.payslip-logo h1 span {
+  color: #000;
+}
+.payslip-logo p {
+  font-size: 7px;
+  margin: 2px 0 0 0;
+}
+
+.payslip-title {
+  flex: 1;
+  text-align: center;
+}
+
+.payslip-title h2 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+}
+.payslip-title h3 {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.payslip-meta {
+  flex: 0 0 150px;
+  text-align: right;
+  font-weight: bold;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.payslip-meta span {
+  margin-top: 15px;
+}
+
+/* Tables */
+.payslip-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.payslip-table td, 
+.payslip-table th {
+  border: 1px solid #000;
+  padding: 3px 5px;
+  vertical-align: top;
+}
+
+.payslip-table td strong {
+  font-weight: bold;
+}
+
+/* Specific layout adjustments */
+.payslip-label {
+  font-weight: bold;
+}
+
+.earnings-deductions-container {
+  display: flex;
+  width: 100%;
+}
+
+.earnings-side,
+.deductions-side {
+  width: 50%;
+  border: 1px solid #000;
+}
+.earnings-side {
+  border-right: none;
+}
+
+.ed-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ed-table th {
+  text-align: left;
+  border-bottom: 1px solid #000;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  padding: 4px;
+}
+
+.ed-table th:last-child {
+  text-align: right;
+}
+
+.ed-table td {
+  border: none;
+  padding: 2px 4px;
+}
+
+.ed-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.net-payable-row {
+  border: 1px solid #000;
+  border-left: none;
+  border-right: none;
+  padding: 4px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+/* Footer / Breakups */
+.breakup-container {
+  display: flex;
+  width: 100%;
+  border-top: 1px solid #000;
+}
+.breakup-col {
+  flex: 1;
+  border-right: 1px solid #000;
+}
+.breakup-col:last-child {
+  border-right: none;
+}
+
+.breakup-title {
+  text-align: center;
+  font-weight: bold;
+  border-bottom: 1px solid #000;
+  padding: 2px;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .payslip-print-section, .payslip-print-section * {
+    visibility: visible;
+  }
+  .payslip-print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

@@ -1070,9 +1070,11 @@ export default function AdminWorkspace() {
           <button className={`menu-item ${activeTab === 'vacancy' ? 'active' : ''}`} onClick={() => setActiveTab('vacancy')}>
             <span>🏢</span> Vacancy & Transfers
           </button>
-          <button className={`menu-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-            <span>👥</span> User Management
-          </button>
+          {currentUser?.isSuperAdmin && (
+            <button className={`menu-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+              <span>👥</span> User Management
+            </button>
+          )}
         </nav>
 
         <div className="sidebar-profile">

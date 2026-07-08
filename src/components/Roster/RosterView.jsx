@@ -298,6 +298,16 @@ export default function RosterView(){
   const toggleDesig = d => setSelDesigs(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d]);
 
   // File handlers
+  const downloadRosterTemplate = (type) => {
+    const headers = [["Circle", "Division", "Designation", "Sanction Type", "SC", "ST", "VJ-A", "NT-B", "NT-C", "NT-D", "SBC", "OBC", "SEBC", "EWS", "OPEN", "TOTAL", ...(type === 'filled' ? ["Remark"] : [])]];
+    const wb = XLSX.utils.book_new();
+    const ws3 = XLSX.utils.aoa_to_sheet(headers);
+    const ws4 = XLSX.utils.aoa_to_sheet(headers);
+    XLSX.utils.book_append_sheet(wb, ws3, "III");
+    XLSX.utils.book_append_sheet(wb, ws4, "IV");
+    XLSX.writeFile(wb, `${type === 'sanction' ? 'Sanction' : 'Filled'}_Template.xlsx`);
+  };
+
   const handleSanctionFile = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -604,14 +614,20 @@ export default function RosterView(){
             </div>
             {/* File Uploads */}
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
-              <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(37,99,235,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff"}}>
-                📄 Upload Sanction.xlsx
-                <input type="file" accept=".xlsx,.xls" onChange={handleSanctionFile} style={{display:"none"}}/>
-              </label>
-              <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(22,163,74,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff"}}>
-                📄 Upload Filled.xlsx
-                <input type="file" accept=".xlsx,.xls" onChange={handleFilledFile} style={{display:"none"}}/>
-              </label>
+              <div style={{display:"flex", gap: 4}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(37,99,235,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff", flex: 1}}>
+                  📄 Upload Sanction.xlsx
+                  <input type="file" accept=".xlsx,.xls" onChange={handleSanctionFile} style={{display:"none"}}/>
+                </label>
+                <button onClick={() => downloadRosterTemplate('sanction')} style={{background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:6, padding:"0 8px", color:"#fff", fontSize:10, cursor:"pointer"}}>Template</button>
+              </div>
+              <div style={{display:"flex", gap: 4}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(22,163,74,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff", flex: 1}}>
+                  📄 Upload Filled.xlsx
+                  <input type="file" accept=".xlsx,.xls" onChange={handleFilledFile} style={{display:"none"}}/>
+                </label>
+                <button onClick={() => downloadRosterTemplate('filled')} style={{background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:6, padding:"0 8px", color:"#fff", fontSize:10, cursor:"pointer"}}>Template</button>
+              </div>
               <button onClick={handleRefresh} disabled={refreshing} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:refreshing?"rgba(251,146,60,0.5)":"rgba(251,146,60,0.3)",borderRadius:6,cursor:refreshing?"not-allowed":"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff",fontWeight:600}}>
                 {refreshing ? "🔄 Refreshing..." : "🔄 Refresh Data"}
               </button>

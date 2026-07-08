@@ -51,6 +51,7 @@ export async function GET() {
         username: user.username,
         full_name: user.full_name,
         role: userRole,
+        isSuperAdmin: isSuperAdmin,
         zonenm: isSuperAdmin ? null : user.zonenm,
         circl: isSuperAdmin ? null : user.circl,
         divnm: isSuperAdmin ? null : user.divnm,

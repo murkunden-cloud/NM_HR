@@ -51,7 +51,18 @@ export async function GET(request: Request) {
       if (!employee) {
         return NextResponse.json({ success: false, error: 'Employee not found' }, { status: 404 });
       }
-      return NextResponse.json({ success: true, employee });
+      
+      let fullPayscale = employee.payscl;
+      if (employee.payscl) {
+        const pScale = await prisma.payScale.findUnique({
+          where: { scaleno: employee.payscl }
+        });
+        if (pScale && pScale.payscl) {
+          fullPayscale = pScale.payscl;
+        }
+      }
+      
+      return NextResponse.json({ success: true, employee: { ...employee, fullPayscale } });
     }
 
     const baseWhere: any = {
