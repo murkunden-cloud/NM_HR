@@ -33,7 +33,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ user
 
     if (body.password) {
       updateData.password_hash = hashPassword(body.password);
-      updateData.plain_password = body.password;
     }
 
     const updatedUser = await prisma.user.update({

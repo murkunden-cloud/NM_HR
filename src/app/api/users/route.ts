@@ -50,7 +50,6 @@ export async function POST(request: Request) {
         username: body.username,
         full_name: body.full_name,
         password_hash: hashPassword(body.password || 'password123'),
-        plain_password: body.password || 'password123',
         role: body.role || 'EMPLOYEE',
         zonenm: body.zonenm || null,
         circl: body.circl || null,

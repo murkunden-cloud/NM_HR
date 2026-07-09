@@ -10,7 +10,6 @@ interface User {
   circl?: string | null;
   divnm?: string | null;
   subdnm?: string | null;
-  plain_password?: string | null;
 }
 
 export default function UserManagementView() {
@@ -187,7 +186,6 @@ export default function UserManagementView() {
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Full Name</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Role</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Scope</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: '700', color: '#ffffff' }}>Password (Backup)</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', color: '#ffffff' }}>Actions</th>
             </tr>
           </thead>
@@ -215,9 +213,6 @@ export default function UserManagementView() {
                   </td>
                   <td style={{ padding: '0.75rem 1rem', color: '#cbd5e1', fontSize: '0.85rem' }}>
                     {[u.zonenm, u.circl, u.divnm, u.subdnm].filter(Boolean).join(' / ') || 'Global'}
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem', color: '#f1f5f9' }}>
-                    {u.plain_password || <span style={{ color: '#64748b', fontStyle: 'italic' }}>Hidden (Update to set)</span>}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
                     <button onClick={() => handleOpenEdit(u)} style={{ marginRight: '0.5rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Edit</button>
