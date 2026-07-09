@@ -22,25 +22,36 @@ export function hashPassword(password: string): string {
 /**
  * Verify a password against a stored "salt:hash" string.
  */
-export function verifyPassword(password: string, storedHash: string): boolean {
+export function verifyPassword(password: string, storedHash: string | null | undefined): boolean {
   if (!storedHash) return false;
-  if (storedHash.includes(':')) {
-    const parts = storedHash.split(':');
-    if (parts.length !== 2) return false;
+  
+  const hashStr = String(storedHash);
+  const pwdStr = String(password);
 
-    const [salt, hash] = parts;
-    const derivedKey = crypto.scryptSync(password, salt, 64);
-    const originalHash = Buffer.from(hash, 'hex');
+  try {
+    if (hashStr.includes(':')) {
+      const parts = hashStr.split(':');
+      if (parts.length !== 2) return false;
 
-    return crypto.timingSafeEqual(derivedKey, originalHash);
-  }
+      const [salt, hash] = parts;
+      const derivedKey = crypto.scryptSync(pwdStr, salt, 64);
+      const originalHash = Buffer.from(hash, 'hex');
 
-  if (storedHash.length === 64) {
-    const staticSalt = 'mscdcl_pune_zone_salt_12345';
-    const derivedKey = crypto.pbkdf2Sync(password, staticSalt, 100000, 32, 'sha256');
-    const originalHash = Buffer.from(storedHash, 'hex');
+      if (derivedKey.length !== originalHash.length) return false;
+      return crypto.timingSafeEqual(derivedKey, originalHash);
+    }
 
-    return crypto.timingSafeEqual(derivedKey, originalHash);
+    if (hashStr.length === 64) {
+      const staticSalt = 'mscdcl_pune_zone_salt_12345';
+      const derivedKey = crypto.pbkdf2Sync(pwdStr, staticSalt, 100000, 32, 'sha256');
+      const originalHash = Buffer.from(hashStr, 'hex');
+
+      if (derivedKey.length !== originalHash.length) return false;
+      return crypto.timingSafeEqual(derivedKey, originalHash);
+    }
+  } catch (error) {
+    console.error('verifyPassword error:', error);
+    return false;
   }
 
   return false;
