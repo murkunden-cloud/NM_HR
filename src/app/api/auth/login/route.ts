@@ -118,11 +118,11 @@ export async function POST(request: Request) {
 
     return response;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login API error:', error);
     return NextResponse.json({ 
       success: false, 
-      error: 'An internal error occurred during login.' 
+      error: `An internal error occurred during login. Error details (DEBUG): ${error?.message || String(error)}` 
     }, { status: 500 });
   }
 }
