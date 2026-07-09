@@ -19,7 +19,6 @@ model User {
   divnm         String?
   subdnm        String?
   permissions   String? // JSON string array of page navigations
-  plain_password String?
 }
 
 model Location {
