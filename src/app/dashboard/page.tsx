@@ -136,19 +136,19 @@ export default function EmployeeDashboard() {
       <div className="dashboard-tabs" style={{ display: 'flex', gap: '20px', padding: '0 40px', marginBottom: '20px', borderBottom: '1px solid #e2e8f0' }}>
         <button 
           onClick={() => setActiveTab('profile')}
-          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'profile' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'profile' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'profile' ? '3px solid #38bdf8' : '3px solid transparent', color: activeTab === 'profile' ? '#ffffff' : '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', transition: 'color 0.2s' }}
         >
           My Profile
         </button>
         <button 
           onClick={() => setActiveTab('search')}
-          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'search' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'search' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'search' ? '3px solid #38bdf8' : '3px solid transparent', color: activeTab === 'search' ? '#ffffff' : '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', transition: 'color 0.2s' }}
         >
           Organization Search
         </button>
         <button 
           onClick={() => setActiveTab('payslip')}
-          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'payslip' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'payslip' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'payslip' ? '3px solid #38bdf8' : '3px solid transparent', color: activeTab === 'payslip' ? '#ffffff' : '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', transition: 'color 0.2s' }}
         >
           Payslip
         </button>

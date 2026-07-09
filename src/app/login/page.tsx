@@ -88,7 +88,7 @@ export default function LoginPage() {
         {/* Left Panel: Hero Branding & Stats (Hidden on smaller screens via CSS) */}
           <div className="login-hero">
             <div className="hero-header">
-              <img src="/hr_icon.ico" alt="HRMS Logo" style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.75rem', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)', border: '2px solid rgba(255, 255, 255, 0.1)' }} />
+              <img src="/hr_icon.ico" alt="HRMS Logo" style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.75rem', backgroundColor: '#ffffff', padding: '0.25rem', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)', border: '2px solid rgba(255, 255, 255, 0.1)' }} />
               <span className="logo-text">HRMS</span>
             </div>
 

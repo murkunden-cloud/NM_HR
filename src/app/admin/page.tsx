@@ -1029,7 +1029,7 @@ export default function AdminWorkspace() {
       {/* Sidebar Panel */}
       <aside className="workspace-sidebar">
         <div className="sidebar-brand">
-          <img src="/hr_icon.ico" alt="HRMS Logo" className="brand-logo" style={{ width: '2.25rem', height: '2.25rem', objectFit: 'contain' }} />
+          <img src="/hr_icon.ico" alt="HRMS Logo" className="brand-logo" style={{ width: '2.25rem', height: '2.25rem', objectFit: 'contain', backgroundColor: '#ffffff', borderRadius: '0.5rem', padding: '0.15rem' }} />
           <div>
             <h3>PZHR Web System</h3>
             <span>Pune Zone HR Console</span>
