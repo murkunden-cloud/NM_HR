@@ -23,6 +23,7 @@ export function hashPassword(password: string): string {
  * Verify a password against a stored "salt:hash" string.
  */
 export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash) return false;
   if (storedHash.includes(':')) {
     const parts = storedHash.split(':');
     if (parts.length !== 2) return false;

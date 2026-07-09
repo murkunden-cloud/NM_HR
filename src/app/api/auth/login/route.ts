@@ -16,8 +16,9 @@ export async function POST(request: Request) {
     }
 
     // 2. Fetch User by Username
+    const normalizedUsername = String(username).toLowerCase().trim();
     const user = await prisma.user.findUnique({
-      where: { username: username.toLowerCase().trim() }
+      where: { username: normalizedUsername }
     });
 
     if (!user) {
@@ -28,7 +29,13 @@ export async function POST(request: Request) {
     }
 
     // 3. Verify Password (handles legacy PBKDF2 hashes or scrypt hashes)
-    const isPasswordCorrect = verifyPassword(password, user.password_hash);
+    if (!user.password_hash) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid credentials. Please double check and try again.' 
+      }, { status: 401 });
+    }
+    const isPasswordCorrect = verifyPassword(String(password), user.password_hash);
     if (!isPasswordCorrect) {
       return NextResponse.json({ 
         success: false, 
@@ -37,7 +44,8 @@ export async function POST(request: Request) {
     }
 
     // 4. Role Authorization matching Portal type
-    let isAdminRole = user.role.toLowerCase().includes('admin') || user.role === 'ADMIN';
+    const roleString = String(user.role || '');
+    let isAdminRole = roleString.toLowerCase().includes('admin') || roleString === 'ADMIN';
     
     // Grant global admin to program owners and future super admins
     const isSuperAdmin = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
