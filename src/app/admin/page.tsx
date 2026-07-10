@@ -137,7 +137,21 @@ type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 
 
 export default function AdminWorkspace() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTabRaw] = useState<TabType>('dashboard');
+  const setActiveTab = (tab: TabType) => {
+    setActiveTabRaw(tab);
+    // Clear updating screens
+    setSelectedEmp(null);
+    setSearchQuery('');
+    setEditingPromId(null);
+    setEditingTransferId(null);
+    setLeaveError('');
+    setLeaveSuccess('');
+    setPromSuccess('');
+    setTransSuccess('');
+    setSenioritySuccess('');
+    setSeniorityReport([]);
+  };
   
   // Database States
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -1027,8 +1041,7 @@ export default function AdminWorkspace() {
   return (
     <div className="workspace-container">
       {/* Sidebar Panel */}
-      {activeTab === 'dashboard' && (
-      <aside className="workspace-sidebar">
+      <aside className="workspace-sidebar" style={{ display: activeTab === 'dashboard' ? 'flex' : 'none' }}>
         <div className="sidebar-brand">
           <img src="/hr_icon.ico" alt="HRMS Logo" className="brand-logo" style={{ width: '2.25rem', height: '2.25rem', objectFit: 'contain', backgroundColor: '#ffffff', borderRadius: '0.5rem', padding: '0.15rem' }} />
           <div>
@@ -1086,7 +1099,6 @@ export default function AdminWorkspace() {
           <button className="logout-button" onClick={handleSignOut}>Log Out</button>
         </div>
       </aside>
-      )}
 
       {/* Main Panel Content Area */}
       <main className="workspace-content">
