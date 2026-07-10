@@ -1,17 +1,25 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Fragment } from "react";
 import * as XLSX from "xlsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MASTER DATA  (never mutated)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CASTES = ["SC","ST","VJ-A","NT-B","NT-C","NT-D","SBC","OBC","SEBC","EWS","OPEN","TOTAL"];
+const CASTES = ["SC","ST","VJ-A","NT-B","NT-C","NT-D","SBC","OBC","SEBC","EWS","OPEN","TOTAL","SURPLUS"];
 
 // Helper to parse Excel sheets
 function extractSheetData(arrayBuffer, sheetName) {
   const wb = XLSX.read(arrayBuffer, { type: "array" });
   const ws = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  const header = rows[0] || [];
+  
+  const colIndices = {};
+  CASTES.forEach(caste => {
+    const idx = header.findIndex(h => typeof h === 'string' && h.trim().toUpperCase() === caste.toUpperCase());
+    colIndices[caste] = idx;
+  });
+
   const data = [];
   
   for (let i = 1; i < rows.length; i++) {
@@ -22,8 +30,12 @@ function extractSheetData(arrayBuffer, sheetName) {
     obj.division = row[1] || undefined;
     obj.designation = row[2];
     obj.sanctionType = row[3];
-    CASTES.forEach((caste, idx) => {
-      obj[caste] = Number(row[4 + idx] || 0);
+    CASTES.forEach(caste => {
+      if (colIndices[caste] >= 0) {
+        obj[caste] = Number(row[colIndices[caste]] || 0);
+      } else {
+        obj[caste] = 0;
+      }
     });
     data.push(obj);
   }
@@ -33,40 +45,79 @@ function extractSheetData(arrayBuffer, sheetName) {
 
 function parseRows(buf, sheet) {
   const wb2 = XLSX.read(buf, { type: "array" });
-  if (!wb2.Sheets[sheet]) return { regular: [], surplus: [] };
+  if (!wb2.Sheets[sheet]) return { regular: [], surplus: [], pureSurplus: [] };
   const ws2 = wb2.Sheets[sheet];
   const rows2 = XLSX.utils.sheet_to_json(ws2, { header: 1 });
   const header = rows2[0] || [];
-  const remarkIdx = header.findIndex(h => String(h||'').toLowerCase().includes('remark'));
-  const regular = [], surplus = [];
-  let lastRegular = null; // track adjacency for adjustedAgainst
+
+  // Detect column indices
+  const remarkIdx  = header.findIndex(h => String(h||'').toLowerCase().includes('remark'));
+  
+  const colIndices = {};
+  CASTES.forEach(caste => {
+    const idx = header.findIndex(h => typeof h === 'string' && h.trim().toUpperCase() === caste.toUpperCase());
+    colIndices[caste] = idx;
+  });
+
+  const regular = [], surplus = [], pureSurplus = [];
+  let lastRegular = null; // adjacency tracking
+
   for (let i = 1; i < rows2.length; i++) {
     const row = rows2[i];
     if (!row || !row[2]) continue;
+
+    // Check Remarks column for row-level surplus
     const remarkVal = remarkIdx >= 0 ? String(row[remarkIdx] || '').toLowerCase() : '';
+
+    // Detect if this row is any kind of surplus
     const isSurplus = remarkVal.includes('surp') || remarkVal.includes('supl');
+    
+    // Pure surplus row flag (if any exist)
+    const isPure = remarkVal.includes('pure');
+
     const obj = {};
-    obj.circle = row[0]; obj.division = row[1] || undefined;
-    obj.designation = row[2];
-    obj.sanctionType = row[3] || (isSurplus ? 'Surplus (Adjusted)' : undefined);
-    CASTES.forEach((c, idx) => { obj[c] = Number(row[4 + idx] || 0); });
+    obj.circle       = row[0];
+    obj.division     = row[1] || undefined;
+    obj.designation  = row[2];
+    obj.sanctionType = row[3] || (isSurplus ? 'Surplus' : undefined);
+    
+    const nonTotalCastes = CASTES.filter(c => c !== 'TOTAL');
+    nonTotalCastes.forEach(c => {
+      if (colIndices[c] >= 0) {
+        obj[c] = Number(row[colIndices[c]] || 0);
+      } else {
+        obj[c] = 0;
+      }
+    });
+    obj.TOTAL = nonTotalCastes.reduce((a, c) => a + (obj[c] || 0), 0);
+
     if (isSurplus) {
       obj.isSurplus = true;
-      if (lastRegular) {
+      if (isPure) {
+        // Pure surplus — identified by "pure" keyword in Surplus column
+        // Not linked to any backlog designation, works against total strength only
+        obj.isPureSurplus = true;
+        pureSurplus.push(obj);
+      } else if (lastRegular) {
+        // Adjusted surplus — linked to the regular DR row just above
         obj.adjustedAgainst = {
           designation:  lastRegular.designation,
           sanctionType: lastRegular.sanctionType,
           circle:       lastRegular.circle,
           division:     lastRegular.division
         };
+        surplus.push(obj);
+      } else {
+        // Fallback: surplus with no regular row above → also pure
+        obj.isPureSurplus = true;
+        pureSurplus.push(obj);
       }
-      surplus.push(obj);
     } else {
       lastRegular = obj;
       regular.push(obj);
     }
   }
-  return { regular, surplus };
+  return { regular, surplus, pureSurplus };
 }
 
 
@@ -258,7 +309,9 @@ export default function RosterView(){
   const [filledIII, setFilledIII] = useState([]);
   const [filledIV, setFilledIV] = useState([]);
   const [surplusIII, setSurplusIII] = useState([]);
+  const [pureSurplusIII, setPureSurplusIII] = useState([]);
   const [surplusIV, setSurplusIV] = useState([]);
+  const [pureSurplusIV, setPureSurplusIV] = useState([]);
   const [loading, setLoading] = useState(true);
   // surplusEdits: key = circle||division||surplusDesig => {SC,ST,...} overrides
   const [surplusEdits, setSurplusEdits] = useState(() => {
@@ -333,10 +386,10 @@ export default function RosterView(){
     const file = e.target.files[0];
     if (file) {
       const buffer = await file.arrayBuffer();
-      const { regular: fIII, surplus: sIII2 } = parseRows(buffer, "III");
-      const { regular: fIV,  surplus: sIV2  } = parseRows(buffer, "IV");
-      setFilledIII(fIII); setSurplusIII(sIII2);
-      setFilledIV(fIV);   setSurplusIV(sIV2);
+      const { regular: fIII, surplus: sIII2, pureSurplus: psIII } = parseRows(buffer, "III");
+      const { regular: fIV,  surplus: sIV2, pureSurplus: psIV  } = parseRows(buffer, "IV");
+      setFilledIII(fIII); setSurplusIII(sIII2); setPureSurplusIII(psIII);
+      setFilledIV(fIV);   setSurplusIV(sIV2);   setPureSurplusIV(psIV);
       setFilledEdits({});
       
       const formData = new FormData();
@@ -422,8 +475,15 @@ export default function RosterView(){
     let s=0,f=0,v=0; const cv={};
     CASTES.forEach(c=>cv[c]=0);
     activeRows.forEach(r=>{s+=r.sanction.TOTAL||0;f+=r.filled.TOTAL||0;v+=r.vacant.TOTAL||0;CASTES.forEach(c=>{cv[c]+=(r.vacant[c]||0);});});
-    return{s,f,v,cv};
-  },[activeRows]);
+    
+    const pureSurpArr = cls==="III" ? pureSurplusIII : pureSurplusIV;
+    let ps = 0;
+    pureSurpArr.forEach(r => { ps += (r.TOTAL || 0); });
+    
+    return{s,f,v,cv,ps};
+  },[activeRows, cls, pureSurplusIII, pureSurplusIV]);
+
+  const activePureSurplus = cls==="III" ? pureSurplusIII : pureSurplusIV;
 
   const grouped = useMemo(()=>{
     const g={};
@@ -702,8 +762,8 @@ export default function RosterView(){
 
         {/* Main */}
         <div style={{flex:1,minWidth:0}}>
-          {tab==="dashboard" && <Dashboard summary={summary} grouped={grouped} activeRows={activeRows} cls={cls}/>}
-          {tab==="table"     && <TableView grouped={grouped} cls={cls}/>}
+          {tab==="dashboard" && <Dashboard summary={summary} grouped={grouped} activeRows={activeRows} cls={cls} pureSurplus={activePureSurplus} />}
+          {tab==="table"     && <TableView grouped={grouped} cls={cls} pureSurplus={activePureSurplus} />}
           {tab==="editor" && <EditorView activeRows={activeRows} applyEdit={applyEdit} sanctionEdits={sanctionEdits} filledEdits={filledEdits} surplusEdits={surplusEdits} applySurplusEdit={applySurplusEdit} addManualSurplus={(row)=>addManualSurplus(cls,row)} removeManualSurplus={(srKey)=>removeManualSurplus(cls,srKey)} cls={cls} onSave={handleSave} pendingSaved={pendingSaved}/>}
         </div>
       </div>
@@ -777,7 +837,7 @@ function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Dashboard({summary,grouped,activeRows,cls}){
+function Dashboard({summary,grouped,activeRows,cls,pureSurplus}){
   const CASTE_COLORS = {SC:"#ef4444",ST:"#f97316","VJ-A":"#eab308","NT-B":"#84cc16","NT-C":"#10b981","NT-D":"#06b6d4",SBC:"#8b5cf6",OBC:"#ec4899",SEBC:"#f43f5e",EWS:"#6366f1",OPEN:"#64748b",TOTAL:"#1e293b"};
 
   // Calculate circle-wise totals
@@ -825,9 +885,9 @@ function Dashboard({summary,grouped,activeRows,cls}){
                 return (
                   <tr key={circ} style={{background:i%2===0?"#f8fafc":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                     <td style={{padding:"5px 10px",fontWeight:700,color:"#2563eb",fontSize:11,textAlign:"left"}}>{CIRCLE_FULL[circ] || circ}</td>
-                    <td style={{padding:"5px 10px",textAlign:"center",fontSize:11}}>{s}</td>
-                    <td style={{padding:"5px 10px",textAlign:"center",color:"#16a34a",fontWeight:700,fontSize:11}}>{f}</td>
-                    <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#dc2626":"#16a34a",fontWeight:700,fontSize:11}}>{v}</td>
+                    <td style={{padding:"5px 10px",textAlign:"center",fontSize:13,fontWeight:700,color:"#1e40af",background:"#eff6ff"}}>{s}</td>
+                    <td style={{padding:"5px 10px",textAlign:"center",color:"#15803d",background:"#f0fdf4",fontWeight:900,fontSize:14}}>{f}</td>
+                    <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#b91c1c":"#15803d",background:v>0?"#fef2f2":"#f0fdf4",fontWeight:900,fontSize:14}}>{v}</td>
                     <td style={{padding:"5px 10px",textAlign:"center"}}>
                       <span style={{padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700,background:p>=80?"#dcfce7":p>=60?"#fef3c7":"#fee2e2",color:p>=80?"#16a34a":p>=60?"#b45309":"#dc2626"}}>{p}%</span>
                     </td>
@@ -858,9 +918,9 @@ function Dashboard({summary,grouped,activeRows,cls}){
                     <tr key={key} style={{background:i%2===0?"#f8fafc":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                       <td style={{padding:"5px 10px",fontWeight:700,color:"#2563eb",fontSize:11,textAlign:"left"}}>{CIRCLE_FULL[circle] || circle}</td>
                       <td style={{padding:"5px 10px",fontSize:11,textAlign:"left"}}>{division}</td>
-                      <td style={{padding:"5px 10px",textAlign:"center",fontSize:11}}>{s}</td>
-                      <td style={{padding:"5px 10px",textAlign:"center",color:"#16a34a",fontWeight:700,fontSize:11}}>{f}</td>
-                      <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#dc2626":"#16a34a",fontWeight:700,fontSize:11}}>{v}</td>
+                      <td style={{padding:"5px 10px",textAlign:"center",fontSize:13,fontWeight:700,color:"#1e40af",background:"#eff6ff"}}>{s}</td>
+                      <td style={{padding:"5px 10px",textAlign:"center",color:"#15803d",background:"#f0fdf4",fontWeight:900,fontSize:14}}>{f}</td>
+                      <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#b91c1c":"#15803d",background:v>0?"#fef2f2":"#f0fdf4",fontWeight:900,fontSize:14}}>{v}</td>
                       <td style={{padding:"5px 10px",textAlign:"center"}}>
                         <span style={{padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700,background:p>=80?"#dcfce7":p>=60?"#fef3c7":"#fee2e2",color:p>=80?"#16a34a":p>=60?"#b45309":"#dc2626"}}>{p}%</span>
                       </td>
@@ -892,8 +952,8 @@ function Dashboard({summary,grouped,activeRows,cls}){
                 return (
                   <tr key={circ} style={{background:i%2===0?"#f8fafc":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                     <td style={{padding:"5px 10px",fontWeight:700,color:"#2563eb",fontSize:11,textAlign:"left"}}>{CIRCLE_FULL[circ]||circ}</td>
-                    {CASTES.filter(c=>c!=="TOTAL").map(c=>(<td key={c} style={{padding:"5px 10px",textAlign:"center",fontSize:11}}>{row[c]}</td>))}
-                    <td style={{padding:"5px 10px",textAlign:"center",fontWeight:800,fontSize:11}}>{rowTotal}</td>
+                    {CASTES.filter(c=>c!=="TOTAL").map(c=>(<td key={c} style={{padding:"5px 10px",textAlign:"center",fontSize:13,fontWeight:700,color:row[c]>0?"#b91c1c":"#334155",background:row[c]>0?"#fef2f2":"transparent"}}>{row[c]}</td>))}
+                    <td style={{padding:"5px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#b91c1c",background:"#fef2f2"}}>{rowTotal}</td>
                   </tr>
                 );
               })}
@@ -901,9 +961,9 @@ function Dashboard({summary,grouped,activeRows,cls}){
                 <td style={{padding:"8px 10px",fontWeight:800,fontSize:11}}>Pune Zone Total</td>
                 {CASTES.filter(c=>c!=="TOTAL").map(c=>{
                   const v = activeRows.reduce((a,r)=>a+(r.vacant[c]||0),0);
-                  return (<td key={c} style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:11}}>{v}</td>);
+                  return (<td key={c} style={{padding:"8px 10px",textAlign:"center",fontWeight:900,fontSize:13,color:v>0?"#ffadad":"#fff"}}>{v}</td>);
                 })}
-                <td style={{padding:"8px 10px",textAlign:"center",fontWeight:900,fontSize:11}}>{CASTES.filter(c=>c!=="TOTAL").reduce((a,c)=>a+activeRows.reduce((s,r)=>s+(r.vacant[c]||0),0),0)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center",fontWeight:900,fontSize:15,color:"#ffadad"}}>{CASTES.filter(c=>c!=="TOTAL").reduce((a,c)=>a+activeRows.reduce((s,r)=>s+(r.vacant[c]||0),0),0)}</td>
               </tr>
             </tbody>
           </table>
@@ -911,6 +971,37 @@ function Dashboard({summary,grouped,activeRows,cls}){
       </Card>
 
       
+      {pureSurplus && pureSurplus.length > 0 && (
+        <Card style={{marginBottom:14, borderLeft:"4px solid #f59e0b", background:"linear-gradient(145deg, #1e293b, #0f172a)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <h3 style={{margin:0,color:"#fcd34d",fontSize:16,fontWeight:700}}>⚠️ Pure Surplus Personnel (Not against Sanction)</h3>
+            <span style={{background:"rgba(245,158,11,0.2)",color:"#fbbf24",padding:"4px 10px",borderRadius:20,fontWeight:700,fontSize:12}}>
+              Total: {pureSurplus.reduce((a,r)=>a+(r.TOTAL||0),0)} employees
+            </span>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,background:"#0f172a",borderRadius:6,overflow:"hidden"}}>
+              <thead>
+                <tr>
+                  {["Circle","Division","Designation","Status",...CASTES].map(h=><th key={h} style={{background:"#1e293b",color:"#94a3b8",padding:"8px",textAlign:"center",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {pureSurplus.map((sr,i)=>(
+                  <tr key={i} style={{borderBottom:"1px solid #1e293b"}}>
+                    <td style={{padding:"8px",textAlign:"center",color:"#e2e8f0"}}>{sr.circle}</td>
+                    <td style={{padding:"8px",textAlign:"center",color:"#e2e8f0"}}>{sr.division||"-"}</td>
+                    <td style={{padding:"8px",textAlign:"center",color:"#60a5fa",fontWeight:600}}>{sr.designation}</td>
+                    <td style={{padding:"8px",textAlign:"center",color:"#fbbf24",fontWeight:600}}>Surplus</td>
+                    {CASTES.map(c=><td key={c} style={{padding:"8px",textAlign:"center",color:sr[c]>0?"#fff":"#475569"}}>{sr[c]||"-"}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
     </div>
   );
 }
@@ -919,7 +1010,7 @@ function Dashboard({summary,grouped,activeRows,cls}){
 // TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TableView({grouped,cls}){
+function TableView({grouped,cls,pureSurplus}){
   const [mode,setMode]=useState("all");
   return(
     <div>
@@ -929,6 +1020,38 @@ function TableView({grouped,cls}){
           <button key={v} onClick={()=>setMode(v)} style={{padding:"6px 14px",border:"none",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:mode===v?700:400,background:mode===v?"#2563eb":"#e2e8f0",color:mode===v?"#fff":"#475569"}}>{l}</button>
         ))}
       </div>
+      {pureSurplus && pureSurplus.length > 0 && (mode==="all"||mode==="filled") && (
+        <Card style={{marginBottom:14, border:"1px solid #f59e0b", overflow:"hidden", padding: 0}}>
+          <div style={{background:"rgba(245,158,11,0.15)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid rgba(245,158,11,0.3)"}}>
+            <h4 style={{margin:0,color:"#fbbf24",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:16}}>⚠️</span> Pure Surplus Detail
+            </h4>
+            <span style={{background:"#f59e0b",color:"#000",padding:"4px 10px",borderRadius:20,fontWeight:700,fontSize:11}}>
+              {pureSurplus.reduce((a,r)=>a+(r.TOTAL||0),0)} employees
+            </span>
+          </div>
+          <div style={{overflowX:"auto", padding: "16px"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead>
+                <tr style={{background:"#1e3a5f",color:"#fff"}}>
+                  {["Circle","Division","Designation","Status",...CASTES].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700}}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {pureSurplus.map((sr,i)=>(
+                  <tr key={i} style={{background:i%2===0?"rgba(30,41,59,0.4)":"rgba(56,189,246,0.1)",borderBottom:"1px solid rgba(148,163,184,0.15)"}}>
+                    <td style={{padding:"8px 10px"}}>{sr.circle}</td>
+                    <td style={{padding:"8px 10px"}}>{sr.division||"-"}</td>
+                    <td style={{padding:"8px 10px",color:"#60a5fa"}}>{sr.designation}</td>
+                    <td style={{padding:"8px 10px",color:"#fbbf24",fontWeight:"bold"}}>Surplus</td>
+                    {CASTES.map(c=><td key={c} style={{padding:"8px 10px",textAlign:"center",color:sr[c]>0?"#fff":"#475569"}}>{sr[c]||"-"}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
       {Object.entries(grouped).map(([desig,rows])=>(
         <DesigTable key={desig} desig={desig} rows={rows} mode={mode} cls={cls}/>
       ))}
@@ -965,14 +1088,14 @@ function DesigTable({desig,rows,mode,cls}){
           </thead>
           <tbody>
             {rows.map((r,ri)=>(
-              <>
+              <Fragment key={r.key}>
                 {showSanction&&(
                   <tr key={`${r.key}|s`} style={{background:ri%2===0?"rgba(30,41,59,0.4)":"rgba(56,189,246,0.1)",borderBottom:"1px solid rgba(148,163,184,0.15)"}}>
                     <td style={{...TD,fontWeight:700,color:"#60a5fa"}}>{r.circle}</td>
                     {cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
                     <td style={{...TD,fontSize:10}}>{r.sanctionType}</td>
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.sanction,background:TBG.sanction,whiteSpace:"nowrap"}}>SANCTIONED</td>
-                    {CASTES.map(c=><td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400}}>{r.sanction[c]||0}</td>)}
+                    {CASTES.map(c=><td key={c} style={{...TD,textAlign:"center",fontSize:13,fontWeight:c==="TOTAL"?900:700,color:"#1e40af"}}>{r.sanction[c]||0}</td>)}
                   </tr>
                 )}
 
@@ -987,10 +1110,10 @@ function DesigTable({desig,rows,mode,cls}){
                       FILLED{r.hasSurplus&&<span style={{marginLeft:4,fontSize:9,color:"#f97316"}}>+SURPLUS</span>}
                     </td>
                     {CASTES.map(c=>(
-                      <td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:"#34d399"}}>
+                      <td key={c} style={{...TD,textAlign:"center",fontSize:14,fontWeight:c==="TOTAL"?900:700,color:"#15803d",background:c==="TOTAL"?"rgba(21,128,61,0.1)":"transparent"}}>
                         {r.filled[c]||0}
                         {c==="TOTAL"&&r.hasSurplus&&(
-                          <div style={{fontSize:8,color:"#f97316",fontWeight:600}}>({r.filledBase[c]||0}+{(r.filled[c]||0)-(r.filledBase[c]||0)})</div>
+                          <div style={{fontSize:10,color:"#c2410c",fontWeight:800}}>({r.filledBase[c]||0}+{(r.filled[c]||0)-(r.filledBase[c]||0)})</div>
                         )}
                       </td>
                     ))}
@@ -1025,11 +1148,11 @@ function DesigTable({desig,rows,mode,cls}){
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.vacant,background:TBG.vacant,whiteSpace:"nowrap"}}>VACANT</td>
                     {CASTES.map(c=>{
                       const v=r.vacant[c]||0;
-                      return<td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:v>0?"#f87171":v<0?"#a78bfa":"#cbd5e1"}}>{v}</td>;
+                      return<td key={c} style={{...TD,textAlign:"center",fontSize:14,fontWeight:c==="TOTAL"?900:700,color:v>0?"#b91c1c":v<0?"#6d28d9":"#94a3b8",background:v>0&&c==="TOTAL"?"rgba(185,28,28,0.1)":"transparent"}}>{v}</td>;
                     })}
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -1112,7 +1235,7 @@ function EditorView({activeRows, applyEdit, sanctionEdits, filledEdits, surplusE
               const eSanc = editing?.key===r.key&&editing?.type==="sanction";
               const eFill = editing?.key===r.key&&editing?.type==="filled";
               return(
-                <>
+                <Fragment key={r.key}>
                   {/* SANCTION ROW */}
                   <tr key={`${r.key}|s`} style={{background:ri%2===0?"#eff6ff":"#dbeafe",borderBottom:"1px solid #bfdbfe"}}>
                     <td style={{...TD,fontWeight:800,color:"#1d4ed8",fontSize:13}}>{r.circle}</td>
@@ -1218,7 +1341,7 @@ function EditorView({activeRows, applyEdit, sanctionEdits, filledEdits, surplusE
                     })}
                     <td style={{...TD,textAlign:"center",color:"#94a3b8",fontSize:11,fontWeight:600}}>auto</td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>

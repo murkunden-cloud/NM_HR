@@ -1027,6 +1027,7 @@ export default function AdminWorkspace() {
   return (
     <div className="workspace-container">
       {/* Sidebar Panel */}
+      {activeTab === 'dashboard' && (
       <aside className="workspace-sidebar">
         <div className="sidebar-brand">
           <img src="/hr_icon.ico" alt="HRMS Logo" className="brand-logo" style={{ width: '2.25rem', height: '2.25rem', objectFit: 'contain', backgroundColor: '#ffffff', borderRadius: '0.5rem', padding: '0.15rem' }} />
@@ -1085,15 +1086,37 @@ export default function AdminWorkspace() {
           <button className="logout-button" onClick={handleSignOut}>Log Out</button>
         </div>
       </aside>
+      )}
 
       {/* Main Panel Content Area */}
       <main className="workspace-content">
         
         {/* HEADER BAR */}
         <header className="workspace-header">
-          <div>
-            <h2>{activeTab.toUpperCase().replace('_', ' ')} Workspace</h2>
-            <p>Active Scope: {currentUser ? ([currentUser.zonenm, currentUser.circl, currentUser.divnm, currentUser.subdnm].filter(Boolean).join(' / ') || 'Global Scope') : 'Loading...'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            {activeTab !== 'dashboard' && (
+              <button 
+                onClick={() => setActiveTab('dashboard')} 
+                style={{
+                  background: 'rgba(56, 189, 248, 0.2)', 
+                  border: '1px solid var(--primary-accent)', 
+                  color: 'var(--primary-accent)', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  cursor: 'pointer', 
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>⬅</span> Back to Dashboard
+              </button>
+            )}
+            <div>
+              <h2>{activeTab.toUpperCase().replace('_', ' ')} Workspace</h2>
+              <p>Active Scope: {currentUser ? ([currentUser.zonenm, currentUser.circl, currentUser.divnm, currentUser.subdnm].filter(Boolean).join(' / ') || 'Global Scope') : 'Loading...'}</p>
+            </div>
           </div>
           <div className="header-actions">
             {activeTab === 'employees' && (
