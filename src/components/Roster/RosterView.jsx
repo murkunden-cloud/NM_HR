@@ -199,7 +199,7 @@ function borderThin(){
   return{top:b,bottom:b,left:b,right:b};
 }
 
-function buildSheet(rows, classNum, month, year){
+function buildSheet(rows, classNum, month, year, pureSurplusRows = []){
   // rows: [{circle, division?, designation, sanctionType, sanction:{}, filled:{}, vacant:{}}]
   const isIV = classNum===4;
   const ws={};
@@ -223,8 +223,20 @@ function buildSheet(rows, classNum, month, year){
   R++;
 
   // Data
-  const TYPE_FILLS = {SANCTION:LBLUE, FILLED:LGREEN, VACANT:LRED};
-  const TYPE_HDRS  = {SANCTION:{fgColor:{rgb:"1E40AF"}}, FILLED:{fgColor:{rgb:"15803D"}}, VACANT:{fgColor:{rgb:"B91C1C"}}};
+  const TYPE_FILLS = {
+    SANCTION: LBLUE, 
+    REGULAR: {fgColor:{rgb:"F1F5F9"}}, 
+    SURPLUS: {fgColor:{rgb:"FFF7ED"}}, 
+    WORKING_FILLED: LGREEN, 
+    VACANT: LRED
+  };
+  const TYPE_HDRS  = {
+    SANCTION: {fgColor:{rgb:"1E40AF"}}, 
+    REGULAR: {fgColor:{rgb:"475569"}}, 
+    SURPLUS: {fgColor:{rgb:"EA580C"}}, 
+    WORKING_FILLED: {fgColor:{rgb:"15803D"}}, 
+    VACANT: {fgColor:{rgb:"B91C1C"}}
+  };
 
   // Group rows by designation for subtotals
   const byDesig = {};
@@ -236,9 +248,36 @@ function buildSheet(rows, classNum, month, year){
     R++;
 
     dRows.forEach((row,ri)=>{
-      ["sanction","filled","vacant"].forEach((t,ti)=>{
-        const d=row[t];
-        const rowFill = ti===0?(ri%2===0?null:{fgColor:{rgb:"F8FAFC"}}):TYPE_FILLS[t.toUpperCase()];
+      const workingFilled = { ...row.filled };
+      const regularPost = {};
+      const surplusPost = {};
+      
+      CASTES.forEach(c => {
+        if (c === 'SURPLUS') {
+          surplusPost[c] = (row.filledBase.SURPLUS || 0) + (row.surplusRows?.reduce((a, sr) => a + (sr.SURPLUS || 0), 0) || 0);
+          regularPost[c] = 0;
+        } else if (c !== 'TOTAL') {
+          const explicitSurplus = row.surplusRows?.reduce((a, sr) => a + (sr[c] || 0), 0) || 0;
+          surplusPost[c] = explicitSurplus;
+          regularPost[c] = (workingFilled[c] || 0) - explicitSurplus;
+        }
+      });
+      
+      regularPost.TOTAL = CASTES.filter(c => c !== 'TOTAL' && c !== 'SURPLUS').reduce((a, c) => a + (regularPost[c] || 0), 0);
+      surplusPost.TOTAL = CASTES.filter(c => c !== 'TOTAL').reduce((a, c) => a + (surplusPost[c] || 0), 0);
+      workingFilled.TOTAL = regularPost.TOTAL + surplusPost.TOTAL;
+
+      const rowTypes = [
+        { key: "sanction", label: "SANCTIONED", data: row.sanction, typeKey: "SANCTION" },
+        { key: "filledBase", label: "REGULAR POST", data: regularPost, typeKey: "REGULAR" },
+        { key: "surplus", label: "SURPLUS POST", data: surplusPost, typeKey: "SURPLUS" },
+        { key: "filled", label: "WORKING FILLED", data: workingFilled, typeKey: "WORKING_FILLED" },
+        { key: "vacant", label: "VACANT", data: row.vacant, typeKey: "VACANT" }
+      ];
+
+      rowTypes.forEach((rt, ti)=>{
+        const d = rt.data;
+        const rowFill = ti===0?(ri%2===0?null:{fgColor:{rgb:"F8FAFC"}}):TYPE_FILLS[rt.typeKey];
         let c=0;
         ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.circle,rowFill,ti===0,"1D4ED8");
         if(isIV) ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.division||"",rowFill);
@@ -246,19 +285,69 @@ function buildSheet(rows, classNum, month, year){
           ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.designation,rowFill,true);
           ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.sanctionType,rowFill);
         } else { c+=2; }
-        ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr(["SANCTIONED","FILLED","VACANT"][ti], TYPE_HDRS[t.toUpperCase()]);
+        ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr(rt.label, TYPE_HDRS[rt.typeKey]);
         CASTES.forEach(caste=>{
-          ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(d[caste]||0, rowFill, caste==="TOTAL", t==="vacant");
+          ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(d[caste]||0, rowFill, caste==="TOTAL", rt.key==="vacant");
         });
         R++;
+        
+        // Render detailed surplus adjusted against this row directly underneath the SURPLUS POST row
+        if (rt.key === "surplus" && row.surplusRows && row.surplusRows.length > 0) {
+          row.surplusRows.forEach(sr => {
+            let sc=0;
+            const surFill = {fgColor:{rgb:"FFEDD5"}}; // lighter orange for detailed rows
+            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell(sr.circle || row.circle, surFill, false, "EA580C");
+            if(isIV) ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell(sr.division || row.division || "", surFill);
+            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell(`↳ From: ${sr.designation}`, surFill, false, "EA580C");
+            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell("-", surFill);
+            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = hdr("↳ DETAILS", {fgColor:{rgb:"F97316"}});
+            CASTES.forEach(caste=>{
+              ws[XLSX.utils.encode_cell({r:R,c:sc++})] = numCell(sr[caste]||0, surFill, caste==="TOTAL", false);
+            });
+            R++;
+          });
+        }
       });
     });
 
     // Subtotal for this designation
-    const stS={}, stF={}, stV={};
-    CASTES.forEach(c=>{stS[c]=0;stF[c]=0;stV[c]=0;});
-    dRows.forEach(row=>{ CASTES.forEach(c=>{ stS[c]+=(row.sanction[c]||0); stF[c]+=(row.filled[c]||0); stV[c]+=(row.vacant[c]||0); }); });
-    [["TOTAL SANCTIONED",stS,TYPE_HDRS.SANCTION,LBLUE],["TOTAL FILLED",stF,TYPE_HDRS.FILLED,LGREEN],["TOTAL VACANT",stV,TYPE_HDRS.VACANT,LRED]].forEach(([lbl,data,fill,bg])=>{
+    const stS={}, stReg={}, stSurp={}, stF={}, stV={};
+    CASTES.forEach(c=>{stS[c]=0;stReg[c]=0;stSurp[c]=0;stF[c]=0;stV[c]=0;});
+    
+    dRows.forEach(row=>{ 
+      const workingFilled = { ...row.filled };
+      const regularPost = {};
+      const surplusPost = {};
+      CASTES.forEach(c => {
+        if (c === 'SURPLUS') {
+          surplusPost[c] = (row.filledBase.SURPLUS || 0) + (row.surplusRows?.reduce((a, sr) => a + (sr.SURPLUS || 0), 0) || 0);
+          regularPost[c] = 0;
+        } else if (c !== 'TOTAL') {
+          const explicitSurplus = row.surplusRows?.reduce((a, sr) => a + (sr[c] || 0), 0) || 0;
+          surplusPost[c] = explicitSurplus;
+          regularPost[c] = (workingFilled[c] || 0) - explicitSurplus;
+        }
+      });
+      regularPost.TOTAL = CASTES.filter(c => c !== 'TOTAL' && c !== 'SURPLUS').reduce((a, c) => a + (regularPost[c] || 0), 0);
+      surplusPost.TOTAL = CASTES.filter(c => c !== 'TOTAL').reduce((a, c) => a + (surplusPost[c] || 0), 0);
+      workingFilled.TOTAL = regularPost.TOTAL + surplusPost.TOTAL;
+
+      CASTES.forEach(c=>{ 
+        stS[c]+=(row.sanction[c]||0); 
+        stReg[c]+=(regularPost[c]||0);
+        stSurp[c]+=(surplusPost[c]||0);
+        stF[c]+=(workingFilled[c]||0); 
+        stV[c]+=(row.vacant[c]||0); 
+      }); 
+    });
+
+    [
+      ["TOTAL SANCTIONED", stS, TYPE_HDRS.SANCTION, LBLUE],
+      ["TOTAL REGULAR", stReg, TYPE_HDRS.REGULAR, TYPE_FILLS.REGULAR],
+      ["TOTAL SURPLUS", stSurp, TYPE_HDRS.SURPLUS, TYPE_FILLS.SURPLUS],
+      ["TOTAL WORKING FILLED", stF, TYPE_HDRS.WORKING_FILLED, LGREEN],
+      ["TOTAL VACANT", stV, TYPE_HDRS.VACANT, LRED]
+    ].forEach(([lbl,data,fill,bg])=>{
       let c=0;
       ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr(lbl,fill);
       if(isIV) ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr("",fill);
@@ -270,6 +359,25 @@ function buildSheet(rows, classNum, month, year){
     });
     R++; // blank row between designations
   });
+
+  if (pureSurplusRows && pureSurplusRows.length > 0) {
+    ws[XLSX.utils.encode_cell({r:R,c:0})] = {v:`PURE SURPLUS PERSONNEL (Not against Sanction)`,t:"s",s:{font:{bold:true,name:"Arial",sz:10,color:{rgb:"FFFFFF"}},fill:{patternType:"solid",fgColor:{rgb:"D97706"}},alignment:{horizontal:"left",vertical:"center"}}};
+    R++;
+    pureSurplusRows.forEach((sr, ri) => {
+      let c=0;
+      const rowFill = ri%2===0?null:{fgColor:{rgb:"FFFBEB"}};
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(sr.circle,rowFill,false,"1D4ED8");
+      if(isIV) ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(sr.division||"-",rowFill);
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(sr.designation,rowFill,true);
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell("-",rowFill);
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr("SURPLUS", {fgColor:{rgb:"D97706"}});
+      CASTES.forEach(caste=>{
+        ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(sr[caste]||0, rowFill, caste==="TOTAL");
+      });
+      R++;
+    });
+    R++;
+  }
 
   // Col widths
   const colW = isIV
@@ -287,10 +395,10 @@ function buildSheet(rows, classNum, month, year){
   return ws;
 }
 
-function exportExcel(rows3, rows4, month, year, filename){
+function exportExcel(rows3, rows4, ps3, ps4, month, year, filename){
   const wb = XLSX.utils.book_new();
-  if(rows3.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows3,3,month,year), "Class III");
-  if(rows4.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows4,4,month,year), "Class IV");
+  if(rows3.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows3,3,month,year,ps3), "Class III");
+  if(rows4.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows4,4,month,year,ps4), "Class IV");
   XLSX.writeFile(wb, filename || `MSEDCL_Backlog_${month}_${year}.xlsx`);
 }
 
@@ -340,6 +448,7 @@ export default function RosterView(){
   const [lastSaved, setLastSaved] = useState(() => localStorage.getItem("msedcl_lastSaved") || "");
   const [refreshing, setRefreshing] = useState(false);
   const [autoUpdateStatus, setAutoUpdateStatus] = useState({ monitoring: false, lastCheck: null, modificationsDetected: false });
+  const [generatingBacklog, setGeneratingBacklog] = useState(false);
 
   const allDesigs = cls==="III" ? [...new Set(sanctionIII.map(r=>r.designation))] : [...new Set(sanctionIV.map(r=>r.designation))];
 
@@ -539,7 +648,42 @@ export default function RosterView(){
   // Export
   const handleExport = () => {
     const r3 = buildRows("III"); const r4 = buildRows("IV");
-    exportExcel(r3,r4,month,year);
+    exportExcel(r3,r4,pureSurplusIII,pureSurplusIV,month,year);
+  };
+
+  // Generate Backlog Proforma_A report
+  const handleGenerateBacklog = async () => {
+    setGeneratingBacklog(true);
+    setSaveMsg("⏳ Generating Backlog Proforma_A report...");
+    
+    try {
+      const response = await fetch("/api/roster/backlog-report", {
+        method: "GET"
+      });
+      
+      if (response.ok) {
+        setSaveMsg("✅ Report generated! Downloading...");
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "Backlog_Proforma_A.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        setTimeout(() => setSaveMsg(""), 3000);
+      } else {
+        const errorMsg = await response.text();
+        setSaveMsg(`❌ Failed: ${errorMsg}`);
+        setTimeout(() => setSaveMsg(""), 4000);
+      }
+    } catch (error) {
+      setSaveMsg("❌ Error generating report");
+      setTimeout(() => setSaveMsg(""), 4000);
+    } finally {
+      setGeneratingBacklog(false);
+    }
   };
 
   // Apply surplus edit
@@ -720,15 +864,12 @@ export default function RosterView(){
               )}
               {saveMsg && <span style={{fontSize:12,color:"#86efac",fontWeight:600}}>{saveMsg}</span>}
               {lastSaved && !saveMsg && <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",whiteSpace:"nowrap"}}>💾 {lastSaved}</span>}
-              <button onClick={handleExport} style={{padding:"7px 18px",background:"#16a34a",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(22,163,74,0.4)"}}>
-                📥 Export Excel
-              </button>
             </div>
           </div>
 
           {/* Tabs */}
           <div style={{display:"flex",gap:0,marginTop:12,alignItems:"flex-end"}}>
-            {[["dashboard","📊 Dashboard"],["table","📋 Roster Table"],["editor","✏️ Edit Data"]].map(([id,lbl])=>(
+            {[["dashboard","📊 Dashboard"],["table","📋 Roster Table"],["editor","✏️ Edit Data"],["reports","📈 Reports"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 24px",background:tab===id?"rgba(255,255,255,0.18)":"transparent",border:"none",borderBottom:tab===id?"3px solid #fff":"3px solid transparent",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:tab===id?800:500,transition:"all 0.2s",letterSpacing:0.3}}>
                 {lbl}
               </button>
@@ -765,6 +906,19 @@ export default function RosterView(){
           {tab==="dashboard" && <Dashboard summary={summary} grouped={grouped} activeRows={activeRows} cls={cls} pureSurplus={activePureSurplus} />}
           {tab==="table"     && <TableView grouped={grouped} cls={cls} pureSurplus={activePureSurplus} />}
           {tab==="editor" && <EditorView activeRows={activeRows} applyEdit={applyEdit} sanctionEdits={sanctionEdits} filledEdits={filledEdits} surplusEdits={surplusEdits} applySurplusEdit={applySurplusEdit} addManualSurplus={(row)=>addManualSurplus(cls,row)} removeManualSurplus={(srKey)=>removeManualSurplus(cls,srKey)} cls={cls} onSave={handleSave} pendingSaved={pendingSaved}/>}
+          {tab==="reports" && (
+            <div style={{padding:24, background:"#fff", borderRadius:12, boxShadow:"0 4px 12px rgba(0,0,0,0.05)"}}>
+              <h2 style={{marginTop:0, marginBottom:20, color:"#1e3a5f"}}>Generate Reports</h2>
+              <div style={{display:"flex", gap: 16, flexWrap:"wrap"}}>
+                <button onClick={handleExport} style={{padding:"10px 24px",background:"#16a34a",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(22,163,74,0.4)"}}>
+                  📥 Export Standard Excel
+                </button>
+                <button onClick={handleGenerateBacklog} disabled={generatingBacklog} style={{padding:"10px 24px",background:generatingBacklog?"rgba(139,92,246,0.5)":"#8b5cf6",border:"none",borderRadius:7,color:"#fff",cursor:generatingBacklog?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(139,92,246,0.4)"}}>
+                  {generatingBacklog ? "⏳ Generating..." : "📈 Backlog Proforma_A"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

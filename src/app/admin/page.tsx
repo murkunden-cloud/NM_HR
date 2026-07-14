@@ -168,6 +168,8 @@ export default function AdminWorkspace() {
   const [retLAPDays, setRetLAPDays] = useState('300');
   const [retCOMDays, setRetCOMDays] = useState('180');
   
+  const [retSearchQuery, setRetSearchQuery] = useState('');
+  
   // Sub-tab selection state inside Employee Master detail panel
   const [subTab, setSubTab] = useState<'biodata' | 'service' | 'increment' | 'career' | 'location'>('biodata');
 
@@ -2347,8 +2349,38 @@ export default function AdminWorkspace() {
                   </div>
                 </div>
               ) : (
-                <div className="select-placeholder">
-                  <p>Please select an employee in the <strong>Employee Master</strong> tab first to load their retirement claims modeler.</p>
+                <div className="select-placeholder" style={{display:'flex', flexDirection:'column', alignItems:'center', gap: '16px'}}>
+                  <p>Search for an employee by CPF No or Name to load their retirement claims modeler.</p>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Search by CPF No or Name..."
+                    value={retSearchQuery}
+                    onChange={e => setRetSearchQuery(e.target.value)}
+                    style={{width: '300px', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1'}}
+                  />
+                  {retSearchQuery.length > 1 && (
+                    <div style={{maxHeight: '300px', overflowY: 'auto', width: '100%', maxWidth: '500px', background: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}>
+                      {employees
+                        .filter(emp => emp.empno.toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && emp.empnm.toLowerCase().includes(retSearchQuery.toLowerCase())))
+                        .map(emp => (
+                          <div 
+                            key={emp.empno}
+                            onClick={() => {
+                              setSelectedEmp(emp);
+                              setRetSearchQuery('');
+                            }}
+                            style={{padding: '12px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between'}}
+                          >
+                            <span style={{fontWeight: 600}}>{emp.empnm || 'Unknown'}</span>
+                            <span style={{color: '#64748b'}}>{emp.empno}</span>
+                          </div>
+                        ))}
+                      {employees.filter(emp => emp.empno.toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && emp.empnm.toLowerCase().includes(retSearchQuery.toLowerCase()))).length === 0 && (
+                        <div style={{padding: '12px 16px', color: '#64748b'}}>No employees found.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
