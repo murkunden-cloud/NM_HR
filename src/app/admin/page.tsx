@@ -58,6 +58,7 @@ interface Employee {
   caste_validity_no?: string | null;
   caste_validity_dt?: string | null;
   seniority_no?: string | null;
+  retir_status?: string | null;
 }
 
 interface PayScale {
