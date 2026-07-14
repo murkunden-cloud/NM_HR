@@ -3,6 +3,36 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { verifySessionToken } from '@/lib/auth';
 
+import dayjs from 'dayjs';
+
+function computeRetirement(emp: any) {
+  let status = 'Unknown';
+  let computedRetDate = emp.dtofretir;
+
+  if (emp.brthdt) {
+    let bdate = dayjs(emp.brthdt);
+    if (!bdate.isValid() && emp.brthdt.includes('/')) {
+      const parts = emp.brthdt.split('/');
+      bdate = dayjs(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    }
+    
+    if (bdate.isValid()) {
+      const payGroup = (emp.paygrp || '').toString().toLowerCase();
+      const isClass4 = payGroup === '4' || payGroup === 'iv' || payGroup.includes('class 4') || payGroup.includes('class-4') || payGroup.includes('class-iv');
+      const retAge = isClass4 ? 60 : 58;
+      
+      computedRetDate = bdate.add(retAge, 'year').endOf('month').format('YYYY-MM-DD');
+    }
+  }
+
+  if (computedRetDate) {
+    const today = dayjs().format('YYYY-MM-DD');
+    status = computedRetDate < today ? 'Retired' : 'Live';
+  }
+
+  return { ...emp, dtofretir: computedRetDate, retir_status: status };
+}
+
 export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -62,7 +92,7 @@ export async function GET(request: Request) {
         }
       }
       
-      return NextResponse.json({ success: true, employee: { ...employee, fullPayscale } });
+      return NextResponse.json({ success: true, employee: computeRetirement({ ...employee, fullPayscale }) });
     }
 
     const baseWhere: any = {
@@ -91,7 +121,7 @@ export async function GET(request: Request) {
         },
         take: limit
       });
-      return NextResponse.json({ success: true, employees });
+      return NextResponse.json({ success: true, employees: employees.map(computeRetirement) });
     }
 
     // 3. Search employees
@@ -108,7 +138,7 @@ export async function GET(request: Request) {
         },
         take: limit
       });
-      return NextResponse.json({ success: true, employees });
+      return NextResponse.json({ success: true, employees: employees.map(computeRetirement) });
     }
 
     // 4. Get recent employees as default list
@@ -117,7 +147,7 @@ export async function GET(request: Request) {
       take: limit,
       orderBy: { empno: 'asc' }
     });
-    return NextResponse.json({ success: true, employees });
+    return NextResponse.json({ success: true, employees: employees.map(computeRetirement) });
 
   } catch (error) {
     console.error('API Employees GET error:', error);

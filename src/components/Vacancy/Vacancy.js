@@ -261,9 +261,9 @@ export default function Vacancy() {
   const uploadBaseExcel = async (file) => {
     const fd = new FormData(); fd.append("file", file);
     try {
-      const { data } = await api.post("/locations/bulk-upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const { data } = await api.post("/locations/bulk-upload", fd);
       toast.success(`Loaded ${data.loaded} rows`); reload();
-    } catch (e) { toast.error(e.response?.data?.detail || "Upload failed"); }
+    } catch (e) { toast.error(e.response?.data?.error || e.response?.data?.detail || "Upload failed"); }
   };
 
   const downloadTemplate = () => {
@@ -315,7 +315,12 @@ export default function Vacancy() {
                 </Button>
                 <label className="inline-flex items-center gap-2 px-4 h-11 bg-white/10 border border-white/20 rounded-md text-base cursor-pointer hover:bg-white/20 font-semibold text-white" data-testid="upload-base-btn">
                   <Upload className="w-4 h-4" /> Replace Base
-                  <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => e.target.files[0] && uploadBaseExcel(e.target.files[0])} />
+                  <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
+                    if (e.target.files[0]) {
+                      uploadBaseExcel(e.target.files[0]);
+                      e.target.value = '';
+                    }
+                  }} />
                 </label>
               </>
             )}

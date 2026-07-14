@@ -320,7 +320,9 @@ export default function AdminWorkspace() {
       if (res.ok) {
         const data = await res.json();
         setEmployees(data.employees || []);
-        setActiveTab('employees');
+        if (!['employees', 'go74', 'increment', 'seniority', 'leaves', 'retirement'].includes(activeTab)) {
+          setActiveTab('employees');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -1137,7 +1139,7 @@ export default function AdminWorkspace() {
             </div>
           </div>
           <div className="header-actions">
-            {activeTab === 'employees' && (
+            {['employees', 'go74', 'increment', 'seniority', 'leaves', 'retirement'].includes(activeTab) && (
               <>
                 <input
                   type="text"
@@ -1300,7 +1302,14 @@ export default function AdminWorkspace() {
                       <div className="profile-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <h4>Profile: {selectedEmp.empnm}</h4>
-                          <span className="badge">{selectedEmp.empno}</span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                            <span className="badge">{selectedEmp.empno}</span>
+                            {selectedEmp.retir_status && (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', padding: '2px 8px', borderRadius: '12px', backgroundColor: selectedEmp.retir_status === 'Live' ? '#10b981' : '#f43f5e', color: 'white' }}>
+                                {selectedEmp.retir_status} {selectedEmp.dtofretir ? `(${selectedEmp.dtofretir})` : ''}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <button onClick={() => setBiodataPrintMode(true)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'var(--yellow-accent)', border: 'none', borderRadius: '0.25rem', color: 'black', cursor: 'pointer', fontWeight: 'bold' }}>
                           📄 Generate Biodata Report
@@ -2269,7 +2278,19 @@ export default function AdminWorkspace() {
                 <div className="retirement-workspace">
                   <div className="emp-summary-header">
                     <h4>🏝️ Post-Retirement Claims Calculator</h4>
-                    <p>{selectedEmp.empnm} ({selectedEmp.empno}) &bull; Last Basic Pay: ₹{selectedEmp.basic.toLocaleString()}</p>
+                    <p style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                      <span><strong>{selectedEmp.empnm}</strong> ({selectedEmp.empno}) &bull; Last Basic Pay: ₹{selectedEmp.basic.toLocaleString()}</span>
+                      {selectedEmp.retir_status && (
+                        <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold', backgroundColor: selectedEmp.retir_status === 'Live' ? '#d1fae5' : '#ffe4e6', color: selectedEmp.retir_status === 'Live' ? '#065f46' : '#9f1239' }}>
+                          {selectedEmp.retir_status}
+                        </span>
+                      )}
+                    </p>
+                    <p style={{ fontSize: '0.9rem', color: '#64748b', display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      <span><strong>DOB:</strong> {selectedEmp.brthdt || '-'}</span>
+                      <span><strong>DOJ (Company):</strong> {selectedEmp.compjoindt || '-'}</span>
+                      <span><strong>Retirement:</strong> {selectedEmp.dtofretir || '-'}</span>
+                    </p>
                   </div>
 
                   <div className="claims-controls">
@@ -2301,11 +2322,14 @@ export default function AdminWorkspace() {
                       const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
 
                       // LAP Encashment
-                      const lapDays = parseFloat(retLAPDays) || 0;
+                      const inputLapDays = parseFloat(retLAPDays) || 0;
+                      const lapDays = Math.min(inputLapDays, 300);
                       const lapAmount = (totalEmoluments * lapDays) / 30;
 
                       // COM Encashment
-                      const comDays = parseFloat(retCOMDays) || 0;
+                      const inputHplDays = parseFloat(retCOMDays) || 0;
+                      // Maximum 180 days of full pay equivalent (i.e. 360 HPL days)
+                      const comDays = Math.min(inputHplDays / 2, 180);
                       const comAmount = (totalEmoluments * comDays) / 30;
 
                       return (
@@ -2322,20 +2346,20 @@ export default function AdminWorkspace() {
                           <div className="claim-item-result">
                             <h4>🏖️ LAP Leave Encashment</h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
-                              <label style={{ fontSize: '0.75rem' }}>Capped Days:</label>
+                              <label style={{ fontSize: '0.75rem' }}>Available LAP in Service (Days):</label>
                               <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
                             </div>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays}) &divide; 30</p>
+                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays} capped at 300) &divide; 30</p>
                             <h3>₹{lapAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
                           </div>
 
                           <div className="claim-item-result">
-                            <h4>🏥 COM Leave Encashment</h4>
+                            <h4>🏥 COM Leave Encashment (HPL)</h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
-                              <label style={{ fontSize: '0.75rem' }}>Capped Days:</label>
+                              <label style={{ fontSize: '0.75rem' }}>Available HPL in Service (Half Pay Days):</label>
                               <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
                             </div>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays}) &divide; 30</p>
+                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays} equivalent full pay days) &divide; 30</p>
                             <h3>₹{comAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
                           </div>
 
@@ -2354,39 +2378,28 @@ export default function AdminWorkspace() {
                 </div>
               ) : (
                 <div className="select-placeholder" style={{display:'flex', flexDirection:'column', alignItems:'center', gap: '16px'}}>
-                  <p>Search for an employee by CPF No or Name to load their retirement claims modeler.</p>
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Search by CPF No or Name..."
-                    value={retSearchQuery}
-                    onChange={e => setRetSearchQuery(e.target.value)}
-                    style={{width: '300px', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1'}}
-                  />
-                  {retSearchQuery.length > 1 && (
+                  <p>Please use the main search bar above to search for an employee, or select from the results below.</p>
+                  {employees.length > 0 && (
                     <div style={{maxHeight: '300px', overflowY: 'auto', width: '100%', maxWidth: '500px', background: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}>
-                      {employees
-                        .filter(emp => String(emp.empno).toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && String(emp.empnm).toLowerCase().includes(retSearchQuery.toLowerCase())))
-                        .map(emp => (
-                          <div 
-                            key={emp.empno}
-                            onClick={() => {
-                              setSelectedEmp(emp);
-                              setRetSearchQuery('');
-                            }}
-                            style={{padding: '12px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between'}}
-                          >
-                            <span style={{fontWeight: 600}}>{emp.empnm || 'Unknown'}</span>
-                            <span style={{color: '#64748b'}}>{emp.empno}</span>
-                          </div>
-                        ))}
-                      {employees.filter(emp => String(emp.empno).toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && String(emp.empnm).toLowerCase().includes(retSearchQuery.toLowerCase()))).length === 0 && (
-                        <div style={{padding: '12px 16px', color: '#64748b'}}>No employees found.</div>
-                      )}
+                      {employees.map(emp => (
+                        <div 
+                          key={emp.empno}
+                          onClick={() => setSelectedEmp(emp)}
+                          style={{padding: '12px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between'}}
+                        >
+                          <span style={{fontWeight: 600}}>{emp.empnm || 'Unknown'}</span>
+                          <span style={{color: '#64748b'}}>{emp.empno}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
+              {/* Embedded External Calculator */}
+              <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                <h4 style={{ marginBottom: '15px' }}>🌐 Full and Final Settlement External Calculator</h4>
+                <iframe src="https://emicalculatorapp.com/full-final-settlement-calculator.html" width="100%" height="800" title="Full and Final Settlement Calculator" style={{ border: 'none', borderRadius: '8px', background: 'white' }}></iframe>
+              </div>
             </div>
           )}
 

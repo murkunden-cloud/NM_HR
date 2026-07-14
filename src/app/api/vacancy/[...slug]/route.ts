@@ -218,20 +218,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       
       const batchSize = 100;
       for (let i = 0; i < data.length; i += batchSize) {
-        const batch = data.slice(i, i + batchSize).map((row: any) => ({
-          region: row.REGION || null,
-          zone: row.ZONE || null,
-          circle: row.CIRCLE || null,
-          division: row.DIVISION || null,
-          subdivision: row.SUBDIVISION || null,
-          orgname: row.ORGNAME || null,
-          cadre: row.CADRE || null,
-          paygroup: row.PAYGROUP ? String(row.PAYGROUP) : null,
-          type: row.TYPEs || row.TYPE || null,
-          designation: row.DESIGNATION || null,
-          sanctioned: parseInt(row.SANCTIONED) || 0,
-          filled_in: parseInt(row.FILLED_IN) || 0,
-        }));
+        const batch = data.slice(i, i + batchSize).map((rawRow: any) => {
+          const row: any = {};
+          for (const key of Object.keys(rawRow)) {
+            if (key) row[key.toString().trim().toUpperCase()] = rawRow[key];
+          }
+          return {
+            region: row.REGION || null,
+            zone: row.ZONE || null,
+            circle: row.CIRCLE || null,
+            division: row.DIVISION || null,
+            subdivision: row.SUBDIVISION || null,
+            orgname: row.ORGNAME || null,
+            cadre: row.CADRE || null,
+            paygroup: row.PAYGROUP ? String(row.PAYGROUP) : null,
+            type: row.TYPES || row.TYPE || null,
+            designation: row.DESIGNATION || null,
+            sanctioned: parseInt(row.SANCTIONED) || 0,
+            filled_in: parseInt(row.FILLED_IN) || 0,
+          };
+        });
         await prisma.vacancyLocation.createMany({ data: batch });
       }
       return NextResponse.json({ loaded: data.length });
