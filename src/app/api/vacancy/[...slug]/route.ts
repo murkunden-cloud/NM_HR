@@ -7,73 +7,66 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
   try {
     if (path === 'filter-options') {
-      const posts = await prisma.sanctionedPost.findMany({
-        select: { circle: true, division: true, designation: true }
-      });
-      const employees = await prisma.employee.findMany({
-        select: { divnm: true }
+      const posts = await prisma.vacancyLocation.findMany({
+        select: { circle: true, division: true, designation: true, cadre: true, paygroup: true, type: true, orgname: true }
       });
 
+      const cadres = [...new Set(posts.map(p => p.cadre).filter(Boolean))];
+      const paygroups = [...new Set(posts.map(p => p.paygroup).filter(Boolean))];
       const circles = [...new Set(posts.map(p => p.circle).filter(Boolean))];
       const divisions = [...new Set(posts.map(p => p.division).filter(Boolean))];
       const designations = [...new Set(posts.map(p => p.designation).filter(Boolean))];
-      const orgnames = [...new Set(employees.map(e => e.divnm).filter(Boolean))];
+      const types = [...new Set(posts.map(p => p.type).filter(Boolean))];
+      const orgnames = [...new Set(posts.map(p => p.orgname).filter(Boolean))];
 
       return NextResponse.json({
-        cadres: ["Unclassified"],
-        paygroups: ["1", "2", "3", "4"],
+        cadres,
+        paygroups,
         classes: ["Class-I", "Class-II", "Class-III", "Class-IV"],
         circles,
         divisions,
         designations,
-        types: ["Technical", "Non-Technical"],
+        types,
         orgnames
       });
     }
 
     if (path === 'locations') {
-      // Fetch all sanctioned posts
-      const posts = await prisma.sanctionedPost.findMany();
-      // Fetch all employees to count FILLED_IN
-      const employees = await prisma.employee.findMany({
-        select: { divnm: true, desigz: true }
-      });
-
+      const posts = await prisma.vacancyLocation.findMany();
       // Fetch transfers out
       const transfersOut = await prisma.transferOut.findMany();
       const transfersIn = await prisma.transferInDeployed.findMany();
 
-      // We need to map these to the format Vacancy.js expects
       const locMap: Record<string, any> = {};
 
       for (const p of posts) {
-        // Group employees by office and designation
-        const filled = employees.filter(e => e.divnm === p.division && e.desigz === p.designation).length;
-        
-        // orgname in legacy was division/subdivision?
-        const orgname = p.division || 'Unknown';
-        const key = `${orgname}_${p.designation}`.toUpperCase();
+        const orgname = p.orgname || 'Unknown';
+        const designation = p.designation || 'Unknown';
+        const key = `${orgname}_${designation}`.toUpperCase();
 
         const out_c = transfersOut.find(t => t.key === key)?.count || 0;
         const in_c = transfersIn.find(t => t.key === key)?.count || 0;
         
-        const sanc = p.count || 0;
-        const active = filled - out_c + in_c;
+        const sanc = p.sanctioned || 0;
+        const base_filled = p.filled_in || 0;
+        const active = base_filled - out_c + in_c;
+
+        const classMap: Record<string, string> = { "1": "Class-I", "2": "Class-II", "3": "Class-III", "4": "Class-IV" };
 
         locMap[key] = {
-          REGION: "Pune",
-          ZONE: "Pune",
+          REGION: p.region || "",
+          ZONE: p.zone || "",
           CIRCLE: p.circle || "",
           DIVISION: p.division || "",
-          SUBDIVISION: "",
+          SUBDIVISION: p.subdivision || "",
           ORGNAME: orgname,
-          CADRE: "Unclassified",
-          PAYGROUP: "3", // Hardcoded for now
-          TYPE: p.sanctionType || "Technical",
-          DESIGNATION: p.designation,
+          CADRE: p.cadre || "Unclassified",
+          PAYGROUP: p.paygroup || "3",
+          TYPE: p.type || "Technical",
+          DESIGNATION: designation,
           SANCTIONED: sanc,
-          FILLED_IN: filled,
-          CLASS: "Class-III",
+          FILLED_IN: base_filled,
+          CLASS: classMap[p.paygroup || "3"] || "Unclassified",
           KEY: key,
           OUT_COUNT: out_c,
           IN_COUNT: in_c,
@@ -171,9 +164,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     }
 
     if (path === 'locations/unmatched') {
-      // Find employees where their office is not in sanctionedPosts.division
-      const posts = await prisma.sanctionedPost.findMany({ select: { division: true }});
-      const validOffices = new Set(posts.map(p => p.division).filter(Boolean));
+      // Find employees where their office is not in vacancy_locations.orgname
+      const posts = await prisma.vacancyLocation.findMany({ select: { orgname: true }});
+      const validOffices = new Set(posts.map(p => p.orgname).filter(Boolean));
       
       const emps = await prisma.employee.findMany({ select: { divnm: true }});
       
@@ -210,6 +203,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const path = slug.join('/');
   
   try {
+    if (path === 'locations/bulk-upload') {
+      const formData = await req.formData();
+      const file = formData.get("file") as File;
+      if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const XLSX = require('xlsx');
+      const wb = XLSX.read(buffer, { type: "buffer" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(sheet);
+      
+      await prisma.vacancyLocation.deleteMany();
+      
+      const batchSize = 100;
+      for (let i = 0; i < data.length; i += batchSize) {
+        const batch = data.slice(i, i + batchSize).map((row: any) => ({
+          region: row.REGION || null,
+          zone: row.ZONE || null,
+          circle: row.CIRCLE || null,
+          division: row.DIVISION || null,
+          subdivision: row.SUBDIVISION || null,
+          orgname: row.ORGNAME || null,
+          cadre: row.CADRE || null,
+          paygroup: row.PAYGROUP ? String(row.PAYGROUP) : null,
+          type: row.TYPEs || row.TYPE || null,
+          designation: row.DESIGNATION || null,
+          sanctioned: parseInt(row.SANCTIONED) || 0,
+          filled_in: parseInt(row.FILLED_IN) || 0,
+        }));
+        await prisma.vacancyLocation.createMany({ data: batch });
+      }
+      return NextResponse.json({ loaded: data.length });
+    }
+
     const body = await req.json().catch(() => ({}));
 
     if (path === 'transfers/in/pool') {
@@ -279,6 +306,24 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
   
   try {
     const body = await req.json().catch(() => ({}));
+    
+    if (path === 'locations/adjust') {
+      const { orgname, designation, sanctioned, filled_in } = body;
+      const existing = await prisma.vacancyLocation.findFirst({
+        where: { orgname, designation }
+      });
+      if (!existing) return NextResponse.json({ error: 'Location not found' }, { status: 404 });
+      
+      const updateData: any = {};
+      if (sanctioned !== undefined) updateData.sanctioned = Number(sanctioned);
+      if (filled_in !== undefined) updateData.filled_in = Number(filled_in);
+      
+      const updated = await prisma.vacancyLocation.update({
+        where: { id: existing.id },
+        data: updateData
+      });
+      return NextResponse.json({ modified: 1 });
+    }
     
     if (path === 'transfers/out') {
       const { orgname, designation, count } = body;

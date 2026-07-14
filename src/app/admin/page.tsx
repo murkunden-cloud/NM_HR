@@ -7,6 +7,7 @@ import RosterView from '@/components/Roster/RosterView';
 import ExcelUpload from '@/components/ExcelUpload';
 import VacancyView from '@/components/Vacancy/Vacancy';
 import UserManagementView from '@/components/Users/UserManagementView';
+import TransferModule from '@/components/Transfers/TransferModule';
 import './admin.css';
 
 // Type declarations matching the schema
@@ -133,7 +134,7 @@ interface TransferHistory {
   transfer_type: string;
 }
 
-type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 'leaves' | 'retirement' | 'payscales' | 'maintain_da' | 'roster' | 'vacancy' | 'users';
+type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 'leaves' | 'retirement' | 'payscales' | 'maintain_da' | 'roster' | 'vacancy' | 'users' | 'transfers';
 
 export default function AdminWorkspace() {
   const router = useRouter();
@@ -1084,7 +1085,10 @@ export default function AdminWorkspace() {
             <span>📊</span> Backlog Roster
           </button>
           <button className={`menu-item ${activeTab === 'vacancy' ? 'active' : ''}`} onClick={() => setActiveTab('vacancy')}>
-            <span>🏢</span> Vacancy & Transfers
+            <span>🏢</span> Vacancy Ledger
+          </button>
+          <button className={`menu-item ${activeTab === 'transfers' ? 'active' : ''}`} onClick={() => setActiveTab('transfers')}>
+            <span>🔄</span> Transfer & Promotion
           </button>
           {currentUser?.isSuperAdmin && (
             <button className={`menu-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
@@ -2534,6 +2538,19 @@ export default function AdminWorkspace() {
           {activeTab === 'vacancy' && (
             <div className="vacancy-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto', backgroundColor: '#ffffff', color: '#0f172a', borderRadius: '1rem', padding: '1.5rem' }}>
               <VacancyView />
+            </div>
+          )}
+
+          {/* TAB: TRANSFERS & PROMOTIONS */}
+          {activeTab === 'transfers' && (
+            <div className="transfers-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
+              <TransferModule 
+                zones={allZones} 
+                circles={allCircles} 
+                divisions={allDivisions} 
+                designations={designations} 
+                hierarchyData={hierarchyData}
+              />
             </div>
           )}
 
