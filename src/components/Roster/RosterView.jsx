@@ -143,7 +143,17 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 // ─────────────────────────────────────────────────────────────────────────────
 
 function normalize(s){ return (s||"").toString().trim().replace(/\s+/g," "); }
-function rowKey(r){ return `${normalize(r.circle)}||${normalize(r.division)}||${normalize(r.designation)}||${normalize(r.sanctionType)}`; }
+function normalizeDiv(d) {
+  let v = normalize(d);
+  if (v.toLowerCase() === "pune mulshi division") return "Mulshi Division";
+  return v;
+}
+function normalizeType(t) {
+  let v = normalize(t);
+  if (v.toLowerCase().includes("by promotion 10%")) return v.replace(/10%/g, "100%");
+  return v;
+}
+function rowKey(r){ return `${normalize(r.circle)}||${normalizeDiv(r.division)}||${normalize(r.designation)}||${normalizeType(r.sanctionType)}`; }
 function vacant(s,f){ const v={...s}; CASTES.forEach(c=>{ v[c]=(s[c]||0)-(f[c]||0); }); return v; }
 
 function buildMaps(sanctionArr, filledArr){
@@ -290,23 +300,6 @@ function buildSheet(rows, classNum, month, year, pureSurplusRows = []){
           ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(d[caste]||0, rowFill, caste==="TOTAL", rt.key==="vacant");
         });
         R++;
-        
-        // Render detailed surplus adjusted against this row directly underneath the SURPLUS POST row
-        if (rt.key === "surplus" && row.surplusRows && row.surplusRows.length > 0) {
-          row.surplusRows.forEach(sr => {
-            let sc=0;
-            const surFill = {fgColor:{rgb:"FFEDD5"}}; // lighter orange for detailed rows
-            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell(sr.circle || row.circle, surFill, false, "EA580C");
-            if(isIV) ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell(sr.division || row.division || "", surFill);
-            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell(`↳ From: ${sr.designation}`, surFill, false, "EA580C");
-            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = cell("-", surFill);
-            ws[XLSX.utils.encode_cell({r:R,c:sc++})] = hdr("↳ DETAILS", {fgColor:{rgb:"F97316"}});
-            CASTES.forEach(caste=>{
-              ws[XLSX.utils.encode_cell({r:R,c:sc++})] = numCell(sr[caste]||0, surFill, caste==="TOTAL", false);
-            });
-            R++;
-          });
-        }
       });
     });
 

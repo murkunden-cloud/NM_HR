@@ -2362,7 +2362,7 @@ export default function AdminWorkspace() {
                   {retSearchQuery.length > 1 && (
                     <div style={{maxHeight: '300px', overflowY: 'auto', width: '100%', maxWidth: '500px', background: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}>
                       {employees
-                        .filter(emp => emp.empno.toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && emp.empnm.toLowerCase().includes(retSearchQuery.toLowerCase())))
+                        .filter(emp => String(emp.empno).toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && String(emp.empnm).toLowerCase().includes(retSearchQuery.toLowerCase())))
                         .map(emp => (
                           <div 
                             key={emp.empno}
@@ -2376,7 +2376,7 @@ export default function AdminWorkspace() {
                             <span style={{color: '#64748b'}}>{emp.empno}</span>
                           </div>
                         ))}
-                      {employees.filter(emp => emp.empno.toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && emp.empnm.toLowerCase().includes(retSearchQuery.toLowerCase()))).length === 0 && (
+                      {employees.filter(emp => String(emp.empno).toLowerCase().includes(retSearchQuery.toLowerCase()) || (emp.empnm && String(emp.empnm).toLowerCase().includes(retSearchQuery.toLowerCase()))).length === 0 && (
                         <div style={{padding: '12px 16px', color: '#64748b'}}>No employees found.</div>
                       )}
                     </div>
