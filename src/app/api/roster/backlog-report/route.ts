@@ -83,8 +83,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Master files not found' }, { status: 404 });
     }
 
-    const sanctionWb = XLSX.readFile(SANCTION_PATH);
-    const filledWb = XLSX.readFile(FILLED_PATH);
+    const sanctionWb = XLSX.read(fs.readFileSync(SANCTION_PATH), { type: 'buffer' });
+    const filledWb = XLSX.read(fs.readFileSync(FILLED_PATH), { type: 'buffer' });
 
     const sanctionIII = XLSX.utils.sheet_to_json(sanctionWb.Sheets["III"] || sanctionWb.Sheets[sanctionWb.SheetNames[0]], { header: 1 }) as any[];
     const sanctionIV = XLSX.utils.sheet_to_json(sanctionWb.Sheets["IV"] || sanctionWb.Sheets[sanctionWb.SheetNames[1]], { header: 1 }) as any[];

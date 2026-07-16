@@ -442,6 +442,8 @@ export default function RosterView(){
   const [refreshing, setRefreshing] = useState(false);
   const [autoUpdateStatus, setAutoUpdateStatus] = useState({ monitoring: false, lastCheck: null, modificationsDetected: false });
   const [generatingBacklog, setGeneratingBacklog] = useState(false);
+  const [generatingQuarterly, setGeneratingQuarterly] = useState(false);
+  const [reportCircle, setReportCircle] = useState("All");
 
   const allDesigs = cls==="III" ? [...new Set(sanctionIII.map(r=>r.designation))] : [...new Set(sanctionIV.map(r=>r.designation))];
 
@@ -679,6 +681,34 @@ export default function RosterView(){
     }
   };
 
+  // Generate Quarterly Backlog report
+  const handleGenerateQuarterly = async (proforma) => {
+    setGeneratingQuarterly(proforma);
+    setSaveMsg(`⏳ Generating Quarterly Proforma ${proforma}...`);
+    try {
+      const response = await fetch(`/api/roster/quarterly-backlog?proforma=${proforma}&circle=${reportCircle}`, {
+        method: "GET",
+      });
+      if (!response.ok) throw new Error("Failed to generate quarterly backlog report");
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Quarterly_Backlog_Proforma_${proforma}_${reportCircle}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSaveMsg(`✅ Quarterly Proforma ${proforma} downloaded!`);
+    } catch (error) {
+      console.error(error);
+      setSaveMsg(`❌ Error downloading Proforma ${proforma}`);
+    } finally {
+      setGeneratingQuarterly(false);
+    }
+  };
+
   // Apply surplus edit
   const applySurplusEdit = (srKey, field, val) => {
     setSurplusEdits(p => {
@@ -902,12 +932,36 @@ export default function RosterView(){
           {tab==="reports" && (
             <div style={{padding:24, background:"#fff", borderRadius:12, boxShadow:"0 4px 12px rgba(0,0,0,0.05)"}}>
               <h2 style={{marginTop:0, marginBottom:20, color:"#1e3a5f"}}>Generate Reports</h2>
+              
+              <div style={{display:"flex", alignItems: "center", gap: 16, marginBottom: 20}}>
+                <label style={{fontWeight: 600, color: "#475569"}}>Select Circle for Quarterly Report:</label>
+                <select 
+                  value={reportCircle} 
+                  onChange={e => setReportCircle(e.target.value)} 
+                  style={{padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1", outline: "none", cursor: "pointer"}}
+                >
+                  <option value="All">All Circles (Zone Total + Circle Sheets)</option>
+                  <option value="RPUC">RPUC</option>
+                  <option value="GKUC">GKUC</option>
+                  <option value="PRC">PRC</option>
+                </select>
+              </div>
+
               <div style={{display:"flex", gap: 16, flexWrap:"wrap"}}>
                 <button onClick={handleExport} style={{padding:"10px 24px",background:"#16a34a",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(22,163,74,0.4)"}}>
                   📥 Export Standard Excel
                 </button>
                 <button onClick={handleGenerateBacklog} disabled={generatingBacklog} style={{padding:"10px 24px",background:generatingBacklog?"rgba(139,92,246,0.5)":"#8b5cf6",border:"none",borderRadius:7,color:"#fff",cursor:generatingBacklog?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(139,92,246,0.4)"}}>
                   {generatingBacklog ? "⏳ Generating..." : "📈 Backlog Proforma_A"}
+                </button>
+                <button onClick={() => handleGenerateQuarterly('A')} disabled={generatingQuarterly === 'A'} style={{padding:"10px 24px",background:generatingQuarterly === 'A'?"rgba(16, 185, 129, 0.5)":"#10b981",border:"none",borderRadius:7,color:"#fff",cursor:generatingQuarterly === 'A'?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(16, 185, 129, 0.4)", marginLeft: "10px"}}>
+                  {generatingQuarterly === 'A' ? "⏳ Generating..." : "📅 Quarterly (Proforma A)"}
+                </button>
+                <button onClick={() => handleGenerateQuarterly('B')} disabled={generatingQuarterly === 'B'} style={{padding:"10px 24px",background:generatingQuarterly === 'B'?"rgba(16, 185, 129, 0.5)":"#10b981",border:"none",borderRadius:7,color:"#fff",cursor:generatingQuarterly === 'B'?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(16, 185, 129, 0.4)", marginLeft: "10px"}}>
+                  {generatingQuarterly === 'B' ? "⏳ Generating..." : "📅 Quarterly (Proforma B)"}
+                </button>
+                <button onClick={() => handleGenerateQuarterly('C')} disabled={generatingQuarterly === 'C'} style={{padding:"10px 24px",background:generatingQuarterly === 'C'?"rgba(16, 185, 129, 0.5)":"#10b981",border:"none",borderRadius:7,color:"#fff",cursor:generatingQuarterly === 'C'?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(16, 185, 129, 0.4)", marginLeft: "10px"}}>
+                  {generatingQuarterly === 'C' ? "⏳ Generating..." : "📅 Quarterly (Proforma C)"}
                 </button>
               </div>
             </div>
