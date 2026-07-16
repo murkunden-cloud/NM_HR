@@ -1,13 +1,61 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { cookies } from 'next/headers';
+import { verifySessionToken } from '@/lib/auth';
 
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string[] }> }) {
   const { slug } = await params;
   const path = slug.join('/');
 
   try {
+    // Extract user session and build filters
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get('pzhr_session')?.value;
+    let locFilter: any = {};
+    let empFilter: any = {};
+    
+    if (sessionToken) {
+      const payload = verifySessionToken(sessionToken);
+      if (payload && payload.sub) {
+        const username = payload.sub;
+        const user = await prisma.user.findUnique({ where: { username } });
+        if (user) {
+          const isAdminAccount = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+          if (!isAdminAccount) {
+            let hasFilter = false;
+            if (user.zonenm && user.zonenm.trim() !== '') {
+              locFilter.zone = user.zonenm;
+              empFilter.zonenm = user.zonenm;
+              hasFilter = true;
+            }
+            if (user.circl && user.circl.trim() !== '') {
+              locFilter.circle = user.circl;
+              empFilter.circl = user.circl;
+              hasFilter = true;
+            }
+            if (user.divnm && user.divnm.trim() !== '') {
+              locFilter.division = user.divnm;
+              empFilter.divnm = user.divnm;
+              hasFilter = true;
+            }
+            if (user.subdnm && user.subdnm.trim() !== '') {
+              locFilter.subdivision = user.subdnm;
+              empFilter.subdnm = user.subdnm;
+              hasFilter = true;
+            }
+            
+            if (!hasFilter) {
+              locFilter.circle = 'NONE_ASSIGNED';
+              empFilter.circl = 'NONE_ASSIGNED';
+            }
+          }
+        }
+      }
+    }
+
     if (path === 'filter-options') {
       const posts = await prisma.vacancyLocation.findMany({
+        where: locFilter,
         select: { circle: true, division: true, designation: true, cadre: true, paygroup: true, type: true, orgname: true }
       });
 
@@ -32,7 +80,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     }
 
     if (path === 'locations') {
-      const posts = await prisma.vacancyLocation.findMany();
+      const posts = await prisma.vacancyLocation.findMany({ where: locFilter });
       // Fetch transfers out
       const transfersOut = await prisma.transferOut.findMany();
       const transfersIn = await prisma.transferInDeployed.findMany();
@@ -84,7 +132,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       const designation = url.searchParams.get('designation');
       if (!orgname || !designation) return NextResponse.json([]);
       const data = await prisma.employee.findMany({
-        where: { divnm: orgname, desigz: designation }
+        where: { divnm: orgname, desigz: designation, ...empFilter }
       });
       const mapped = data.map(e => ({
         id: e.empno,
@@ -140,7 +188,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       const circle = url.searchParams.get('circle') || '';
       const division = url.searchParams.get('division') || '';
 
-      const where: any = {};
+      const where: any = { ...empFilter };
       if (q) {
         where.OR = [
           { empnm: { contains: q, mode: 'insensitive' } },
@@ -165,10 +213,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
     if (path === 'locations/unmatched') {
       // Find employees where their office is not in vacancy_locations.orgname
-      const posts = await prisma.vacancyLocation.findMany({ select: { orgname: true }});
+      const posts = await prisma.vacancyLocation.findMany({ where: locFilter, select: { orgname: true }});
       const validOffices = new Set(posts.map(p => p.orgname).filter(Boolean));
       
-      const emps = await prisma.employee.findMany({ select: { divnm: true }});
+      const emps = await prisma.employee.findMany({ where: empFilter, select: { divnm: true }});
       
       const unmatchedCounts: Record<string, number> = {};
       for (const e of emps) {

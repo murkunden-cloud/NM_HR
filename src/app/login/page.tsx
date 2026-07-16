@@ -18,6 +18,59 @@ export default function LoginPage() {
   const [passwordError, setPasswordError] = useState('');
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
+  
+  // Reset Password Modal State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetCpf, setResetCpf] = useState('');
+  const [resetSecret, setResetSecret] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [resetMessage, setResetMessage] = useState('');
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCpf || !resetSecret || !resetPassword) {
+      setResetStatus('error');
+      setResetMessage('All fields are required');
+      return;
+    }
+    
+    setResetStatus('loading');
+    setResetMessage('');
+
+    try {
+      const response = await fetch('/api/auth/reset-superadmin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cpf: resetCpf,
+          secret: resetSecret,
+          newPassword: resetPassword
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResetStatus('success');
+        setResetMessage(data.message || 'Password reset successfully!');
+        setTimeout(() => {
+          setShowResetModal(false);
+          setResetStatus('idle');
+          setResetMessage('');
+          setResetCpf('');
+          setResetSecret('');
+          setResetPassword('');
+        }, 2000);
+      } else {
+        setResetStatus('error');
+        setResetMessage(data.error || 'Password reset failed');
+      }
+    } catch (error) {
+      setResetStatus('error');
+      setResetMessage('An unexpected error occurred');
+    }
+  };
 
   const validateForm = () => {
     let isValid = true;
@@ -276,7 +329,7 @@ export default function LoginPage() {
                     <div className="checkbox-custom" />
                     <span>Remember me</span>
                   </label>
-                  <a href="#" className="forgot-password" onClick={(e) => e.preventDefault()}>
+                  <a href="#" className="forgot-password" onClick={(e) => { e.preventDefault(); setShowResetModal(true); }}>
                     Forgot password?
                   </a>
                 </div>
@@ -325,6 +378,40 @@ export default function LoginPage() {
             </div>
           </div>
         </>
+      
+      {/* Superadmin Reset Modal */}
+      {showResetModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', color: '#333' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '1.2rem', color: '#1e3a8a' }}>Superadmin Password Reset</h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '20px' }}>This tool is only for the Super Admin (2266083) to reset their password.</p>
+            
+            {resetStatus === 'success' && <div style={{ color: '#059669', marginBottom: '15px', fontSize: '0.9rem', backgroundColor: '#d1fae5', padding: '10px', borderRadius: '6px' }}>{resetMessage}</div>}
+            {resetStatus === 'error' && <div style={{ color: '#e11d48', marginBottom: '15px', fontSize: '0.9rem', backgroundColor: '#ffe4e6', padding: '10px', borderRadius: '6px' }}>{resetMessage}</div>}
+            
+            <form onSubmit={handleResetSubmit}>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '5px' }}>CPF Number (must be 2266083)</label>
+                <input type="text" value={resetCpf} onChange={e => setResetCpf(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} disabled={resetStatus === 'loading'} />
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '5px' }}>Mobile Number OR PAN Number</label>
+                <input type="text" value={resetSecret} onChange={e => setResetSecret(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} disabled={resetStatus === 'loading'} />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '5px' }}>New Password</label>
+                <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} disabled={resetStatus === 'loading'} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowResetModal(false)} style={{ padding: '8px 16px', border: '1px solid #cbd5e1', backgroundColor: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }} disabled={resetStatus === 'loading'}>Cancel</button>
+                <button type="submit" style={{ padding: '8px 16px', border: 'none', backgroundColor: '#2563eb', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }} disabled={resetStatus === 'loading'}>
+                  {resetStatus === 'loading' ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

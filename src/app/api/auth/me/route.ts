@@ -42,7 +42,7 @@ export async function GET() {
       });
     }
 
-    const isSuperAdmin = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    const isSuperAdmin = user.username === '2266083';
     const userRole = isSuperAdmin ? 'ADMIN' : user.role;
 
     return NextResponse.json({

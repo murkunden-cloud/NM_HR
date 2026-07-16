@@ -32,15 +32,33 @@ function KPI({ label, value, subtitle, variant, icon: Icon }) {
   );
 }
 
-export default function Vacancy() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+export default function Vacancy({ currentUser }) {
+  const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
+  const isAdmin = isSuperAdmin;
+  
+  const CIRCLE_FULL = {RPUC:"Rastapeth Urban Circle",GKUC:"Ganeshkhind Urban Circle",PRC:"Pune Rural Circle"};
+  const getCircleFullName = (c) => {
+    if(!c) return null;
+    const lowerC = c.toLowerCase();
+    const match = Object.entries(CIRCLE_FULL).find(([k,v]) => lowerC.includes(v.toLowerCase()) || lowerC.includes(k.toLowerCase()));
+    return match ? match[0] : c; // Database stores shortcode 'GKUC', so we must return shortcode if matched
+  };
+  let userCircleName = currentUser?.circl ? getCircleFullName(currentUser.circl) : null;
+  const userDivision = currentUser?.divnm || null;
+  if (!userCircleName && userDivision) {
+    // If they have no circle but have a division, we can let f.circle be "All"
+    // The backend will restrict the data to their division anyway.
+    // Or we can try to guess their circle, but defaulting to "All" is safer for Vacancy 
+    // since backend locations API is securely filtered.
+    userCircleName = "All";
+  }
+  const initialCircle = isSuperAdmin ? "All" : (userCircleName || "NONE_ASSIGNED");
 
   const [locations, setLocations] = useState([]);
   const [pool, setPool] = useState([]);
   const [opts, setOpts] = useState({ cadres: [], paygroups: [], circles: [], divisions: [], designations: [] });
 
-  const [f, setF] = useState({ cadre: "All", paygroup: "All", type: "All", circle: "All", division: "All", designation: "All" });
+  const [f, setF] = useState({ cadre: "All", paygroup: "All", type: "All", circle: initialCircle, division: "All", designation: "All" });
   const [statusFilter, setStatusFilter] = useState("all"); // all | vacant | filled | surplus
   const [searched, setSearched] = useState(false);
 
@@ -230,7 +248,7 @@ export default function Vacancy() {
     if (Object.values(f).every(v => v === "All")) return toast.error("Please pick at least one filter");
     setSearched(true);
   };
-  const onClear = () => { setF({ cadre: "All", paygroup: "All", type: "All", circle: "All", division: "All", designation: "All" }); setSearched(false); };
+  const onClear = () => { setF({ cadre: "All", paygroup: "All", type: "All", circle: initialCircle, division: "All", designation: "All" }); setSearched(false); };
 
   const handleSetOut = async (val) => {
     if (!outDlg) return;
@@ -355,8 +373,8 @@ export default function Vacancy() {
           ].map(([label, key, list]) => (
             <div key={key}>
               <Label className="text-sm font-semibold text-slate-700">{label}</Label>
-              <Select value={f[key]} onValueChange={(v) => setF(s => ({ ...s, [key]: v }))}>
-                <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 h-11 text-base text-slate-900" data-testid={`filter-${key}`}>
+              <Select value={f[key]} onValueChange={(v) => setF(s => ({ ...s, [key]: v }))} disabled={key === "circle" && !isSuperAdmin}>
+                <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 h-11 text-base text-slate-900 disabled:opacity-50" data-testid={`filter-${key}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-white text-slate-900 max-h-[300px]">

@@ -2544,14 +2544,14 @@ export default function AdminWorkspace() {
           {/* TAB: ROSTER */}
           {activeTab === 'roster' && (
             <div className="roster-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
-              <RosterView />
+              <RosterView currentUser={currentUser} />
             </div>
           )}
 
           {/* TAB: VACANCY */}
           {activeTab === 'vacancy' && (
             <div className="vacancy-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto', backgroundColor: '#ffffff', color: '#0f172a', borderRadius: '1rem', padding: '1.5rem' }}>
-              <VacancyView />
+              <VacancyView currentUser={currentUser} />
             </div>
           )}
 

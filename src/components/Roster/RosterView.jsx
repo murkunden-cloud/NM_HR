@@ -399,12 +399,41 @@ function exportExcel(rows3, rows4, ps3, ps4, month, year, filename){
 // ROOT APP
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function RosterView(){
+export default function RosterView({ currentUser }){
   const now = new Date();
   const [tab, setTab] = useState("dashboard");
   const [cls, setCls] = useState("III");
-  const [selCircles, setSelCircles] = useState([...CIRCLES]);
-  const [selDivs, setSelDivs] = useState({RPUC:[...DIVS.RPUC],GKUC:[...DIVS.GKUC],PRC:[...DIVS.PRC]});
+
+  const getCircleShortCode = (c) => {
+    if(!c) return null;
+    const lowerC = c.toLowerCase();
+    const match = Object.entries(CIRCLE_FULL).find(([k,v]) => lowerC.includes(v.toLowerCase()) || lowerC.includes(k.toLowerCase()));
+    return match ? match[0] : null;
+  };
+
+  const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
+  
+  let inferredCircle = currentUser?.circl ? getCircleShortCode(currentUser.circl) : null;
+  const userDivision = currentUser?.divnm || null;
+  if (!inferredCircle && userDivision) {
+    for (const [c, divs] of Object.entries(DIVS)) {
+      if (divs.some(d => d.toLowerCase() === userDivision.toLowerCase())) {
+        inferredCircle = c;
+        break;
+      }
+    }
+  }
+  const userCircle = inferredCircle;
+  const initCircles = isSuperAdmin ? [...CIRCLES] : (userCircle ? [userCircle] : []);
+  
+  let initDivs = {RPUC:[...DIVS.RPUC],GKUC:[...DIVS.GKUC],PRC:[...DIVS.PRC]};
+  if (!isSuperAdmin && userDivision && inferredCircle) {
+    initDivs = {RPUC:[], GKUC:[], PRC:[]};
+    initDivs[inferredCircle] = [userDivision];
+  }
+
+  const [selCircles, setSelCircles] = useState(initCircles);
+  const [selDivs, setSelDivs] = useState(initDivs);
   const [sanctionIII, setSanctionIII] = useState([]);
   const [sanctionIV, setSanctionIV] = useState([]);
   const [filledIII, setFilledIII] = useState([]);
@@ -443,15 +472,21 @@ export default function RosterView(){
   const [autoUpdateStatus, setAutoUpdateStatus] = useState({ monitoring: false, lastCheck: null, modificationsDetected: false });
   const [generatingBacklog, setGeneratingBacklog] = useState(false);
   const [generatingQuarterly, setGeneratingQuarterly] = useState(false);
-  const [reportCircle, setReportCircle] = useState("All");
+  const [reportCircle, setReportCircle] = useState((isSuperAdmin || !userCircle) ? "All" : userCircle);
 
   const allDesigs = cls==="III" ? [...new Set(sanctionIII.map(r=>r.designation))] : [...new Set(sanctionIV.map(r=>r.designation))];
 
   // switch class — reset desigs
   const switchCls = v => { setCls(v); setSelDesigs(v==="III"?[...new Set(sanctionIII.map(r=>r.designation))]:[...new Set(sanctionIV.map(r=>r.designation))]); };
 
-  const toggleCircle = c => setSelCircles(p=>p.includes(c)?p.filter(x=>x!==c):[...p,c]);
-  const toggleDiv = (circ,div) => setSelDivs(p=>({...p,[circ]:p[circ].map(normalize).includes(normalize(div))?p[circ].filter(d=>normalize(d)!==normalize(div)):[...p[circ],div]}));
+  const toggleCircle = c => {
+    if (!isSuperAdmin && c !== userCircle) return;
+    setSelCircles(p=>p.includes(c)?p.filter(x=>x!==c):[...p,c]);
+  };
+  const toggleDiv = (circ,div) => {
+    if (!isSuperAdmin && userDivision && normalize(div) !== normalize(userDivision)) return;
+    setSelDivs(p=>({...p,[circ]:p[circ].map(normalize).includes(normalize(div))?p[circ].filter(d=>normalize(d)!==normalize(div)):[...p[circ],div]}));
+  };
   const toggleDesig = d => setSelDesigs(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d]);
 
   // File handlers
@@ -904,12 +939,10 @@ export default function RosterView(){
       {/* AUTHOR BAR */}
       <div style={{background:"linear-gradient(90deg,#1e3a5f,#2563eb)",color:"#fff",padding:"6px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <span style={{background:"#f59e0b",color:"#1e1e1e",padding:"3px 12px",borderRadius:20,fontWeight:900,fontSize:13,letterSpacing:0.5}}>HEAD CLERK</span>
-          <span style={{fontWeight:800,fontSize:15,letterSpacing:0.3}}>Nagesh D.M.</span>
+          <span style={{background:"#f59e0b",color:"#1e1e1e",padding:"3px 12px",borderRadius:20,fontWeight:900,fontSize:13,letterSpacing:0.5}}>{currentUser?.role || "USER"}</span>
+          <span style={{fontWeight:800,fontSize:15,letterSpacing:0.3}}>{currentUser?.full_name || "Guest"}</span>
           <span style={{opacity:0.7,fontSize:12}}>|</span>
-          <span style={{fontSize:12,fontWeight:600}}>Office: <b>02266083</b></span>
-          <span style={{opacity:0.7,fontSize:12}}>|</span>
-          <span style={{fontSize:12,fontWeight:600}}>Mob: <b style={{color:"#fde68a",fontSize:13}}>7875388248</b></span>
+          <span style={{fontSize:12,fontWeight:600}}>CPF: <b>{currentUser?.username || "N/A"}</b></span>
         </div>
         <div style={{fontSize:11,opacity:0.6,fontStyle:"italic"}}>MSEDCL Pune Zone — Backlog Roster System</div>
       </div>
@@ -921,7 +954,8 @@ export default function RosterView(){
         <div style={{width:226,flexShrink:0}}>
           <Sidebar cls={cls} setCls={switchCls} selCircles={selCircles} toggleCircle={toggleCircle}
             selDivs={selDivs} toggleDiv={toggleDiv} allDesigs={allDesigs}
-            selDesigs={selDesigs} setSelDesigs={setSelDesigs} toggleDesig={toggleDesig} isIV={cls==="IV"}/>
+            selDesigs={selDesigs} setSelDesigs={setSelDesigs} toggleDesig={toggleDesig} isIV={cls==="IV"}
+            isSuperAdmin={isSuperAdmin} userCircle={userCircle} />
         </div>
 
         {/* Main */}
@@ -978,8 +1012,12 @@ export default function RosterView(){
 // SIDEBAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs,selDesigs,setSelDesigs,toggleDesig,isIV}){
+function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs,selDesigs,setSelDesigs,toggleDesig,isIV,isSuperAdmin,userCircle,userDivision}){
   const [openC,setOpenC]=useState(null);
+  const lockCircle = !isSuperAdmin;
+  const normalize = s => (s||"").toLowerCase().trim();
+  const lockDiv = !isSuperAdmin && !!userDivision;
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <Card>
@@ -995,18 +1033,20 @@ function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs
         {CIRCLES.map(c=>(
           <div key={c}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-              <input type="checkbox" checked={selCircles.includes(c)} onChange={()=>toggleCircle(c)} style={{accentColor:"#2563eb",cursor:"pointer"}}/>
-              <span style={{fontSize:12,fontWeight:700,flex:1,cursor:"pointer",color:"#1e3a5f"}} onClick={()=>toggleCircle(c)}>{c}</span>
+              <input type="checkbox" checked={selCircles.includes(c)} onChange={()=>toggleCircle(c)} disabled={lockCircle && c !== userCircle} style={{accentColor:"#2563eb",cursor:lockCircle && c !== userCircle ? "not-allowed" : "pointer"}}/>
+              <span style={{fontSize:12,fontWeight:700,flex:1,cursor:lockCircle && c !== userCircle ? "not-allowed" : "pointer",color:(lockCircle && c !== userCircle) ? "#94a3b8" : "#1e3a5f"}} onClick={()=>{if(!lockCircle || c === userCircle) toggleCircle(c);}}>{c}</span>
               {isIV&&<button onClick={()=>setOpenC(openC===c?null:c)} style={{border:"none",background:"none",cursor:"pointer",fontSize:11,color:"#2563eb",padding:"0 2px"}}>{openC===c?"▲":"▼"}</button>}
             </div>
             {isIV&&openC===c&&(
               <div style={{paddingLeft:18,marginBottom:4}}>
-                {DIVS[c]?.map(div=>(
+                {DIVS[c]?.map(div=>{
+                  const isDisabledDiv = lockDiv && normalize(div) !== normalize(userDivision);
+                  return (
                   <div key={div} style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
-                    <input type="checkbox" checked={selDivs[c]?.includes(div)} onChange={()=>toggleDiv(c,div)} style={{accentColor:"#2563eb",cursor:"pointer"}}/>
-                    <span style={{fontSize:10,color:"#475569",cursor:"pointer",lineHeight:1.4}} onClick={()=>toggleDiv(c,div)}>{div.replace(" Division","")}</span>
+                    <input type="checkbox" checked={selDivs[c]?.includes(div)} onChange={()=>toggleDiv(c,div)} disabled={isDisabledDiv} style={{accentColor:"#2563eb",cursor:isDisabledDiv?"not-allowed":"pointer"}}/>
+                    <span style={{fontSize:10,color:isDisabledDiv?"#94a3b8":"#475569",cursor:isDisabledDiv?"not-allowed":"pointer",lineHeight:1.4}} onClick={()=>{if(!isDisabledDiv) toggleDiv(c,div)}}>{div.replace(" Division","")}</span>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
