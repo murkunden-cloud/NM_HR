@@ -1659,8 +1659,8 @@ export default function AdminWorkspace() {
                               <form onSubmit={handleAddPromotion} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingPromId ? 'Edit Promotion' : 'Record Promotion'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
-                                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newPromJoinDate} onChange={(e) => setNewPromJoinDate(e.target.value)} placeholder="Join Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                  <input type="text" maxLength={10} value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date (DD-MM-YYYY)" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                  <input type="text" maxLength={10} value={newPromJoinDate} onChange={(e) => setNewPromJoinDate(e.target.value)} placeholder="Join Date (DD-MM-YYYY)" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                 </div>
                                 <select value={newPromToDesig} onChange={(e) => setNewPromToDesig(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
                                   <option value="">-- Select Post ({currentDesig?.cat || 'All'} category) --</option>
