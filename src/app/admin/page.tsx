@@ -391,7 +391,7 @@ export default function AdminWorkspace() {
       return dt;
     };
 
-    const headers = ['CPF No', 'Name', 'Designation', 'Location', 'Date of Birth', 'Retirement Date', 'Basic Pay'];
+    const headers = ['CPF No', 'Name', 'Designation', 'Location', 'Date of Birth', 'Retirement Date', 'Circle'];
     const rows = retirListEmployees.map(emp => [
       emp.empno,
       emp.empnm || '',
@@ -399,7 +399,7 @@ export default function AdminWorkspace() {
       emp.divnm || emp.locnm || '',
       formatDt(emp.brthdt),
       formatDt(emp.dtofretir),
-      emp.basic || 0
+      emp.circl || ''
     ]);
     
     const wsData = [headers, ...rows];
@@ -2649,7 +2649,7 @@ export default function AdminWorkspace() {
                         <th>Location</th>
                         <th>Date of Birth</th>
                         <th>Retirement Date</th>
-                        <th>Basic Pay</th>
+                        <th>Circle</th>
                         <th>Action</th>
                       </tr>
                     </thead>
@@ -2662,7 +2662,7 @@ export default function AdminWorkspace() {
                           <td>{emp.divnm || emp.locnm || '-'}</td>
                           <td>{emp.brthdt && /^\\d{4}-\\d{2}-\\d{2}$/.test(emp.brthdt) ? `${emp.brthdt.split('-')[2]}-${emp.brthdt.split('-')[1]}-${emp.brthdt.split('-')[0]}` : emp.brthdt}</td>
                           <td style={{ color: 'var(--red-accent)', fontWeight: 'bold' }}>{emp.dtofretir && /^\\d{4}-\\d{2}-\\d{2}$/.test(emp.dtofretir) ? `${emp.dtofretir.split('-')[2]}-${emp.dtofretir.split('-')[1]}-${emp.dtofretir.split('-')[0]}` : emp.dtofretir}</td>
-                          <td>₹{emp.basic}</td>
+                          <td>{emp.circl || '-'}</td>
                           <td>
                             <button 
                               onClick={() => { setSelectedEmp(emp); setBiodataPrintMode(true); }}
