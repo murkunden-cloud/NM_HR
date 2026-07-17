@@ -12,7 +12,7 @@ function computeRetirement(emp: any) {
   if (emp.brthdt) {
     let bdate = dayjs(emp.brthdt);
     if (!bdate.isValid() && emp.brthdt.includes('/')) {
-      const parts = emp.brthdt.split('/');
+      const parts = emp.brthdt.split(/[/-]/);
       bdate = dayjs(`${parts[2]}-${parts[1]}-${parts[0]}`);
     }
     
@@ -95,8 +95,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, employee: computeRetirement({ ...employee, fullPayscale }) });
     }
 
+    const today = dayjs().format('YYYY-MM-DD');
     const baseWhere: any = {
-      ...scopeFilter
+      ...scopeFilter,
+      OR: [
+        { dtofretir: { gte: today } },
+        { dtofretir: null },
+        { dtofretir: '' }
+      ]
     };
 
     if (!isAdminAccount) {

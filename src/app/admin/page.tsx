@@ -135,7 +135,7 @@ interface TransferHistory {
   transfer_type: string;
 }
 
-type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 'leaves' | 'retirement' | 'payscales' | 'maintain_da' | 'roster' | 'vacancy' | 'users' | 'transfers';
+type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 'leaves' | 'retirement' | 'payscales' | 'maintain_da' | 'roster' | 'vacancy' | 'users' | 'transfers' | 'misc_data';
 
 export default function AdminWorkspace() {
   const router = useRouter();
@@ -174,6 +174,13 @@ export default function AdminWorkspace() {
   
   // Sub-tab selection state inside Employee Master detail panel
   const [subTab, setSubTab] = useState<'biodata' | 'service' | 'increment' | 'career' | 'location'>('biodata');
+  const [miscSubTab, setMiscSubTab] = useState<'leaves' | 'payscales' | 'maintain_da' | 'retir_list'>('leaves');
+  
+  // Retir List states
+  const [retirMonthFilter, setRetirMonthFilter] = useState('');
+  const [retirZoneFilter, setRetirZoneFilter] = useState('');
+  const [retirListEmployees, setRetirListEmployees] = useState<Employee[]>([]);
+  const [retirListLoading, setRetirListLoading] = useState(false);
 
   // Sub-table transaction states
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
@@ -349,6 +356,58 @@ export default function AdminWorkspace() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFetchRetirList = async () => {
+    if (!retirMonthFilter) return;
+    setRetirListLoading(true);
+    try {
+      const url = new URL(`/api/employees/retired`, window.location.origin);
+      url.searchParams.set('month', retirMonthFilter);
+      if (retirZoneFilter) url.searchParams.set('zone', retirZoneFilter);
+      
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const data = await res.json();
+        setRetirListEmployees(data.employees || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRetirListLoading(false);
+    }
+  };
+
+  const handleExportRetirExcel = () => {
+    if (retirListEmployees.length === 0) return;
+    
+    // Format DD-MM-YYYY
+    const formatDt = (dt: string | null | undefined) => {
+      if (!dt) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) {
+        const [y, m, d] = dt.split('-');
+        return `${d}-${m}-${y}`;
+      }
+      return dt;
+    };
+
+    const headers = ['CPF No', 'Name', 'Designation', 'Location', 'Date of Birth', 'Retirement Date', 'Basic Pay'];
+    const rows = retirListEmployees.map(emp => [
+      emp.empno,
+      emp.empnm || '',
+      emp.desigz || '',
+      emp.divnm || emp.locnm || '',
+      formatDt(emp.brthdt),
+      formatDt(emp.dtofretir),
+      emp.basic || 0
+    ]);
+    
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Retired Employees");
+    
+    XLSX.writeFile(wb, `retired_employees_${retirMonthFilter || 'all'}.xlsx`);
   };
 
   const handleGenerateSeniority = async () => {
@@ -1072,17 +1131,11 @@ export default function AdminWorkspace() {
           <button className={`menu-item ${activeTab === 'seniority' ? 'active' : ''}`} onClick={() => setActiveTab('seniority')}>
             <span>🎖️</span> Seniority List
           </button>
-          <button className={`menu-item ${activeTab === 'leaves' ? 'active' : ''}`} onClick={() => setActiveTab('leaves')}>
-            <span>📅</span> Leave Records
-          </button>
           <button className={`menu-item ${activeTab === 'retirement' ? 'active' : ''}`} onClick={() => setActiveTab('retirement')}>
             <span>🏖</span> Retirement Claims
           </button>
-          <button className={`menu-item ${activeTab === 'payscales' ? 'active' : ''}`} onClick={() => setActiveTab('payscales')}>
-            <span>💰</span> Pay Scales circulars
-          </button>
-          <button className={`menu-item ${activeTab === 'maintain_da' ? 'active' : ''}`} onClick={() => setActiveTab('maintain_da')}>
-            <span>📈</span> Maintain DA Rates
+          <button className={`menu-item ${activeTab === 'misc_data' ? 'active' : ''}`} onClick={() => setActiveTab('misc_data')}>
+            <span>📁</span> Misc Data
           </button>
           <button className={`menu-item ${activeTab === 'roster' ? 'active' : ''}`} onClick={() => setActiveTab('roster')}>
             <span>📊</span> Backlog Roster
@@ -1471,7 +1524,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Validity Date</label>
-                            <input type="date" value={selectedEmp.caste_validity_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, caste_validity_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.caste_validity_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, caste_validity_dt: e.target.value })} />
                           </div>
 
                           <div className="form-group" style={{ gridColumn: 'span 2', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.25rem', marginBottom: '0.25rem', marginTop: '0.5rem' }}>
@@ -1496,19 +1549,19 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>1st Appointment Date</label>
-                            <input type="date" value={selectedEmp.first_appointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, first_appointment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.first_appointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, first_appointment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Date of Joining (1st Join Date)</label>
-                            <input type="date" value={selectedEmp.compjoindt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, compjoindt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.compjoindt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, compjoindt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Date of Retirement</label>
-                            <input type="date" value={selectedEmp.dtofretir || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, dtofretir: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.dtofretir || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, dtofretir: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Deemed Date of Promotion</label>
-                            <input type="date" value={selectedEmp.deem_date_prom || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, deem_date_prom: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.deem_date_prom || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, deem_date_prom: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Active Pay Scale Circular</label>
@@ -1521,7 +1574,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Absorption Date (for Sahayyak / Temp)</label>
-                            <input type="date" value={selectedEmp.absorption_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, absorption_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.absorption_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, absorption_dt: e.target.value })} />
                           </div>
 
                           <div className="form-group" style={{ gridColumn: 'span 2', borderTop: '1px solid var(--border-glass)', paddingTop: '1rem', marginTop: '0.5rem' }}>
@@ -1529,7 +1582,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Re-appointment Date</label>
-                            <input type="date" value={selectedEmp.reappointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, reappointment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.reappointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, reappointment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Internal Recruitment / Cadre Status</label>
@@ -1541,7 +1594,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Date of Refusal</label>
-                            <input type="date" value={selectedEmp.prom_refused_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, prom_refused_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.prom_refused_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, prom_refused_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Reason for Refusal</label>
@@ -1559,11 +1612,11 @@ export default function AdminWorkspace() {
                         <div className="form-grid-col2 animate-fade">
                           <div className="form-group">
                             <label>Last Increment Date</label>
-                            <input type="date" value={selectedEmp.last_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, last_increment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.last_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, last_increment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Next Increment Due Date</label>
-                            <input type="date" value={selectedEmp.next_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, next_increment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.next_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, next_increment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Suspension Days</label>
@@ -1606,8 +1659,8 @@ export default function AdminWorkspace() {
                               <form onSubmit={handleAddPromotion} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingPromId ? 'Edit Promotion' : 'Record Promotion'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                                  <input type="date" value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
-                                  <input type="date" value={newPromJoinDate} onChange={(e) => setNewPromJoinDate(e.target.value)} placeholder="Join Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newPromJoinDate} onChange={(e) => setNewPromJoinDate(e.target.value)} placeholder="Join Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                 </div>
                                 <select value={newPromToDesig} onChange={(e) => setNewPromToDesig(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
                                   <option value="">-- Select Post ({currentDesig?.cat || 'All'} category) --</option>
@@ -1651,7 +1704,7 @@ export default function AdminWorkspace() {
                               <form onSubmit={handleAddTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingTransferId ? 'Edit Transfer' : 'Record Transfer'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                                  <input type="date" value={newTransDate} onChange={(e) => setNewTransDate(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }} title="Transfer Order Date" />
+                                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newTransDate} onChange={(e) => setNewTransDate(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }} title="Transfer Order Date" />
                                   <select value={newTransType} onChange={(e) => setNewTransType(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
                                     <option value="Regular">Regular Transfer</option>
                                     <option value="Mutual">Mutual Transfer</option>
@@ -1683,11 +1736,11 @@ export default function AdminWorkspace() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                     <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Transferred From Date</span>
-                                    <input type="date" value={newTransFromDate} onChange={(e) => setNewTransFromDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                    <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newTransFromDate} onChange={(e) => setNewTransFromDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                     <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Joined To Date</span>
-                                    <input type="date" value={newTransToDate} onChange={(e) => setNewTransToDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                    <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newTransToDate} onChange={(e) => setNewTransToDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                   </div>
                                 </div>
                                 <select value={newTransToDesig} onChange={(e) => setNewTransToDesig(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
@@ -2115,7 +2168,7 @@ export default function AdminWorkspace() {
                             </td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.casteValidityDate || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_castvaldt_${emp.empNo}`}
@@ -2125,7 +2178,7 @@ export default function AdminWorkspace() {
                             <td>{emp.promotionJoiningDate || ''}</td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.transferDate || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_transdt_${emp.empNo}`}
@@ -2142,7 +2195,7 @@ export default function AdminWorkspace() {
                             <td>{emp.transferFromZoneCircle || ''}</td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.dateJoinedCompany || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_compjoindt_${emp.empNo}`}
@@ -2150,7 +2203,7 @@ export default function AdminWorkspace() {
                             </td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.presentPostJoiningDate || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_ppljoindt_${emp.empNo}`}
@@ -2161,7 +2214,7 @@ export default function AdminWorkspace() {
                             </td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.dateOfBirth || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_brthdt_${emp.empNo}`}
@@ -2184,8 +2237,18 @@ export default function AdminWorkspace() {
             </div>
           )}
 
-          {/* TAB 6: LEAVE RECORDS */}
-          {activeTab === 'leaves' && (
+          {/* TAB: MISC DATA SUB-TABS */}
+          {activeTab === 'misc_data' && (
+            <div className="sub-tabs-nav" style={{ marginBottom: '1.5rem', background: 'rgba(30, 41, 59, 0.5)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
+              <button className={`sub-tab-btn ${miscSubTab === 'leaves' ? 'active' : ''}`} onClick={() => setMiscSubTab('leaves')}>Leave Records</button>
+              <button className={`sub-tab-btn ${miscSubTab === 'payscales' ? 'active' : ''}`} onClick={() => setMiscSubTab('payscales')}>Pay Circulars</button>
+              <button className={`sub-tab-btn ${miscSubTab === 'maintain_da' ? 'active' : ''}`} onClick={() => setMiscSubTab('maintain_da')}>Maintain DA Rates</button>
+              <button className={`sub-tab-btn ${miscSubTab === 'retir_list' ? 'active' : ''}`} onClick={() => setMiscSubTab('retir_list')}>Retir Emp List</button>
+            </div>
+          )}
+
+          {/* SUB-TAB: LEAVE RECORDS */}
+          {activeTab === 'misc_data' && miscSubTab === 'leaves' && (
             <div className="leaves-view animate-fade">
               {selectedEmp ? (
                 <div className="leaves-workspace">
@@ -2215,11 +2278,11 @@ export default function AdminWorkspace() {
                         </div>
                         <div className="form-group">
                           <label>From Date</label>
-                          <input type="date" value={newLeaveFrom} onChange={(e) => setNewLeaveFrom(e.target.value)} required />
+                          <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newLeaveFrom} onChange={(e) => setNewLeaveFrom(e.target.value)} required />
                         </div>
                         <div className="form-group">
                           <label>To Date</label>
-                          <input type="date" value={newLeaveTo} onChange={(e) => setNewLeaveTo(e.target.value)} required />
+                          <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newLeaveTo} onChange={(e) => setNewLeaveTo(e.target.value)} required />
                         </div>
                         <div className="form-group">
                           <label>Leave Duration (Days)</label>
@@ -2404,8 +2467,8 @@ export default function AdminWorkspace() {
             </div>
           )}
 
-          {/* TAB 8: PAY SCALES CIRCULARS */}
-          {activeTab === 'payscales' && (
+          {/* SUB-TAB: PAY SCALES CIRCULARS */}
+          {activeTab === 'misc_data' && miscSubTab === 'payscales' && (
             <div className="payscales-view animate-fade">
               <h3>💰 Registered Pay Scales Circular Roster</h3>
               <p>Below is the list of all active pay scale series and circular ranges populated directly from the PostgreSQL database.</p>
@@ -2433,8 +2496,8 @@ export default function AdminWorkspace() {
             </div>
           )}
 
-          {/* TAB 9: MAINTAIN DA RATES & GO 74 NOTIONAL ARREARS */}
-          {activeTab === 'maintain_da' && (
+          {/* SUB-TAB: MAINTAIN DA RATES & GO 74 NOTIONAL ARREARS */}
+          {activeTab === 'misc_data' && miscSubTab === 'maintain_da' && (
             <div className="maintain-da-view animate-fade" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '2rem' }}>
               {/* Left: DA rates ledger */}
               <div className="da-rates-ledger-panel">
@@ -2474,8 +2537,8 @@ export default function AdminWorkspace() {
                   style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', padding: '1rem', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
                 >
                   <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Register New DA Rate</label>
-                  <input type="date" value={newDaFrom} onChange={(e) => setNewDaFrom(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
-                  <input type="date" value={newDaTo} onChange={(e) => setNewDaTo(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
+                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newDaFrom} onChange={(e) => setNewDaFrom(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
+                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newDaTo} onChange={(e) => setNewDaTo(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
                   <input type="number" placeholder="DA percentage e.g. 52" value={newDaPct} onChange={(e) => setNewDaPct(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
                   <button type="submit" className="save-btn" style={{ padding: '0.5rem', fontSize: '0.8rem' }}>Add DA Record</button>
                 </form>
@@ -2503,11 +2566,11 @@ export default function AdminWorkspace() {
                       </div>
                       <div className="form-group">
                         <label>Claim From Date</label>
-                        <input type="date" id="claim_from" defaultValue="2024-01-01" />
+                        <input type="text" placeholder="DD-MM-YYYY" maxLength={10} id="claim_from" defaultValue="2024-01-01" />
                       </div>
                       <div className="form-group">
                         <label>Claim To Date</label>
-                        <input type="date" id="claim_to" defaultValue="2024-06-30" />
+                        <input type="text" placeholder="DD-MM-YYYY" maxLength={10} id="claim_to" defaultValue="2024-06-30" />
                       </div>
                     </div>
 
@@ -2538,6 +2601,86 @@ export default function AdminWorkspace() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* SUB-TAB: RETIR EMP LIST */}
+          {activeTab === 'misc_data' && miscSubTab === 'retir_list' && (
+            <div className="retir-list-view animate-fade" style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid var(--border-glass)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div>
+                  <h3>🏖️ Retired Employees List</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Generate a comprehensive list of employees retiring in a specific month.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <select
+                    value={retirZoneFilter}
+                    onChange={(e) => setRetirZoneFilter(e.target.value)}
+                    style={{ padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)', background: 'rgba(15,23,42,0.6)', color: 'white' }}
+                  >
+                    <option value="">-- All Zones --</option>
+                    {allZones.map(z => (
+                      <option key={z} value={z}>{z}</option>
+                    ))}
+                  </select>
+                  <input 
+                    type="month" 
+                    value={retirMonthFilter} 
+                    onChange={(e) => setRetirMonthFilter(e.target.value)}
+                    style={{ padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)', background: 'rgba(15,23,42,0.6)', color: 'white' }}
+                  />
+                  <button onClick={handleFetchRetirList} className="save-btn" disabled={retirListLoading} style={{ padding: '0.5rem 1rem' }}>
+                    {retirListLoading ? 'Loading...' : 'Generate List'}
+                  </button>
+                  <button onClick={handleExportRetirExcel} className="edit-btn" disabled={retirListEmployees.length === 0} style={{ padding: '0.5rem 1rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.375rem' }}>
+                    ⬇️ Export Excel
+                  </button>
+                </div>
+              </div>
+
+              {retirListEmployees.length > 0 ? (
+                <div className="employee-table-scroll" style={{ maxHeight: '600px' }}>
+                  <table className="workspace-table">
+                    <thead>
+                      <tr>
+                        <th>CPF No</th>
+                        <th>Name</th>
+                        <th>Designation</th>
+                        <th>Location</th>
+                        <th>Date of Birth</th>
+                        <th>Retirement Date</th>
+                        <th>Basic Pay</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retirListEmployees.map(emp => (
+                        <tr key={emp.empno}>
+                          <td>{emp.empno}</td>
+                          <td>{emp.empnm}</td>
+                          <td>{emp.desigz}</td>
+                          <td>{emp.divnm || emp.locnm || '-'}</td>
+                          <td>{emp.brthdt && /^\\d{4}-\\d{2}-\\d{2}$/.test(emp.brthdt) ? `${emp.brthdt.split('-')[2]}-${emp.brthdt.split('-')[1]}-${emp.brthdt.split('-')[0]}` : emp.brthdt}</td>
+                          <td style={{ color: 'var(--red-accent)', fontWeight: 'bold' }}>{emp.dtofretir && /^\\d{4}-\\d{2}-\\d{2}$/.test(emp.dtofretir) ? `${emp.dtofretir.split('-')[2]}-${emp.dtofretir.split('-')[1]}-${emp.dtofretir.split('-')[0]}` : emp.dtofretir}</td>
+                          <td>₹{emp.basic}</td>
+                          <td>
+                            <button 
+                              onClick={() => { setSelectedEmp(emp); setBiodataPrintMode(true); }}
+                              style={{ padding: '0.25rem 0.5rem', background: 'var(--blue-accent)', color: 'white', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', fontSize: '0.75rem' }}
+                            >
+                              📄 View / PDF
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="select-placeholder" style={{ padding: '2rem', border: '1px dashed var(--border-glass)', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <p>No retired employees found for the selected month, or no month selected.</p>
+                </div>
+              )}
             </div>
           )}
 
