@@ -31,6 +31,7 @@ export default function UserManagementView() {
   const [circl, setCircl] = useState('');
   const [divnm, setDivnm] = useState('');
   const [subdnm, setSubdnm] = useState('');
+  const [isGlobal, setIsGlobal] = useState(false);
 
   const handleFetchEmployee = async () => {
     if (!username) return;
@@ -45,6 +46,7 @@ export default function UserManagementView() {
           setCircl(emp.circl || '');
           setDivnm(emp.divnm || '');
           setSubdnm(emp.subdnm || '');
+          setIsGlobal(!(emp.zonenm || emp.circl || emp.divnm || emp.subdnm));
         } else {
           alert('Employee not found in Master Employees.');
         }
@@ -86,6 +88,7 @@ export default function UserManagementView() {
     setCircl('');
     setDivnm('');
     setSubdnm('');
+    setIsGlobal(true);
     setIsModalOpen(true);
   };
 
@@ -100,6 +103,7 @@ export default function UserManagementView() {
     setCircl(u.circl || '');
     setDivnm(u.divnm || '');
     setSubdnm(u.subdnm || '');
+    setIsGlobal(!(u.zonenm || u.circl || u.divnm || u.subdnm));
     setIsModalOpen(true);
   };
 
@@ -236,7 +240,7 @@ export default function UserManagementView() {
                   value={username} 
                   onChange={(e) => setUsername(e.target.value)} 
                   disabled={editMode}
-                  style={{ flex: 1, padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
+                  style={{ flex: 1, padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: editMode ? '#64748b' : '#000000' }}
                 />
                 {!editMode && (
                   <button type="button" onClick={handleFetchEmployee} style={{ padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.25rem', border: 'none', cursor: 'pointer' }}>
@@ -252,7 +256,7 @@ export default function UserManagementView() {
                 type="text" 
                 value={fullName} 
                 onChange={(e) => setFullName(e.target.value)} 
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }}
               />
             </div>
 
@@ -264,29 +268,50 @@ export default function UserManagementView() {
                 type="password" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }}
               />
             </div>
 
-            <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Zone</label>
-                <input type="text" value={zonenm} onChange={e => setZonenm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Circle</label>
-                <input type="text" value={circl} onChange={e => setCircl(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
-              </div>
-            </div>
-            <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Division</label>
-                <input type="text" value={divnm} onChange={e => setDivnm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Sub-Division</label>
-                <input type="text" value={subdnm} onChange={e => setSubdnm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }} />
-              </div>
+            <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'rgba(15,23,42,0.4)', borderRadius: '0.375rem', border: '1px solid rgba(148,163,184,0.1)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, cursor: 'pointer', marginBottom: isGlobal ? 0 : '1rem' }}>
+                <input 
+                  type="checkbox" 
+                  checked={isGlobal}
+                  onChange={(e) => {
+                    setIsGlobal(e.target.checked);
+                    if (e.target.checked) {
+                      setZonenm(''); setCircl(''); setDivnm(''); setSubdnm('');
+                    }
+                  }}
+                  style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer' }}
+                />
+                <span style={{ color: isGlobal ? '#10b981' : '#ffffff' }}>Global Scope (Access to all locations)</span>
+              </label>
+
+              {!isGlobal && (
+                <>
+                  <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Zone</label>
+                      <input type="text" value={zonenm} onChange={e => setZonenm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Circle</label>
+                      <input type="text" value={circl} onChange={e => setCircl(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Division</label>
+                      <input type="text" value={divnm} onChange={e => setDivnm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 500 }}>Sub-Division</label>
+                      <input type="text" value={subdnm} onChange={e => setSubdnm(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }} />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
@@ -294,7 +319,7 @@ export default function UserManagementView() {
               <select 
                 value={role} 
                 onChange={(e) => setRole(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1' }}
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.25rem', border: '1px solid #cbd5e1', color: '#000000' }}
               >
                 <option value="EMPLOYEE">Employee</option>
                 <option value="ADMIN">Admin</option>

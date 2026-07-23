@@ -4,8 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import RosterView from '@/components/Roster/RosterView';
+import ExcelUpload from '@/components/ExcelUpload';
 import VacancyView from '@/components/Vacancy/Vacancy';
 import UserManagementView from '@/components/Users/UserManagementView';
+import TransferModule from '@/components/Transfers/TransferModule';
 import './admin.css';
 
 // Type declarations matching the schema
@@ -16,6 +18,8 @@ interface Employee {
   desigz: string | null;
   locnm: string | null;
   divnm: string | null;
+  zonenm?: string | null;
+  circl?: string | null;
   basic: number;
   payscl: string | null;
   compjoindt: string | null;
@@ -54,6 +58,7 @@ interface Employee {
   caste_validity_no?: string | null;
   caste_validity_dt?: string | null;
   seniority_no?: string | null;
+  retir_status?: string | null;
 }
 
 interface PayScale {
@@ -130,15 +135,25 @@ interface TransferHistory {
   transfer_type: string;
 }
 
-type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 'leaves' | 'retirement' | 'payscales' | 'maintain_da' | 'roster' | 'vacancy' | 'users';
+type TabType = 'dashboard' | 'employees' | 'go74' | 'increment' | 'seniority' | 'leaves' | 'retirement' | 'payscales' | 'maintain_da' | 'roster' | 'vacancy' | 'users' | 'transfers' | 'misc_data';
 
 export default function AdminWorkspace() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  
-  // Excel Upload State
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
+  const [activeTab, setActiveTabRaw] = useState<TabType>('dashboard');
+  const setActiveTab = (tab: TabType) => {
+    setActiveTabRaw(tab);
+    // Clear updating screens
+    setSelectedEmp(null);
+    setSearchQuery('');
+    setEditingPromId(null);
+    setEditingTransferId(null);
+    setLeaveError('');
+    setLeaveSuccess('');
+    setPromSuccess('');
+    setTransSuccess('');
+    setSenioritySuccess('');
+    setSeniorityReport([]);
+  };
   
   // Database States
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -146,13 +161,26 @@ export default function AdminWorkspace() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
+  const [allZones, setAllZones] = useState<string[]>([]);
+  const [allCircles, setAllCircles] = useState<string[]>([]);
+  const [allDivisions, setAllDivisions] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [biodataPrintMode, setBiodataPrintMode] = useState(false);
   const [retirementPrintMode, setRetirementPrintMode] = useState(false);
   const [retLAPDays, setRetLAPDays] = useState('300');
   const [retCOMDays, setRetCOMDays] = useState('180');
   
+  const [retSearchQuery, setRetSearchQuery] = useState('');
+  
   // Sub-tab selection state inside Employee Master detail panel
-  const [subTab, setSubTab] = useState<'biodata' | 'service' | 'increment' | 'career'>('biodata');
+  const [subTab, setSubTab] = useState<'biodata' | 'service' | 'increment' | 'career' | 'location'>('biodata');
+  const [miscSubTab, setMiscSubTab] = useState<'leaves' | 'payscales' | 'maintain_da' | 'retir_list'>('leaves');
+  
+  // Retir List states
+  const [retirMonthFilter, setRetirMonthFilter] = useState('');
+  const [retirZoneFilter, setRetirZoneFilter] = useState('');
+  const [retirListEmployees, setRetirListEmployees] = useState<Employee[]>([]);
+  const [retirListLoading, setRetirListLoading] = useState(false);
 
   // Sub-table transaction states
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
@@ -233,6 +261,32 @@ export default function AdminWorkspace() {
   // Calculations states
   const [daPercentage, setDaPercentage] = useState(50);
   const [statutoryLimit, setStatutoryLimit] = useState(2000000);
+
+  // Retirement Verification States
+  const [isRetirementVerified, setIsRetirementVerified] = useState(false);
+  const [retFormDob, setRetFormDob] = useState('');
+  const [retFormDoj, setRetFormDoj] = useState('');
+  const [retFormDor, setRetFormDor] = useState('');
+  const [retFormBasic, setRetFormBasic] = useState<number>(0);
+  const [retFormDa, setRetFormDa] = useState<number>(50);
+  const [retDobConfirmed, setRetDobConfirmed] = useState(true);
+  const [retDojConfirmed, setRetDojConfirmed] = useState(true);
+  const [retDorConfirmed, setRetDorConfirmed] = useState(true);
+
+  // Synchronize retirement verification inputs when employee is selected
+  useEffect(() => {
+    if (selectedEmp) {
+      setRetFormDob(selectedEmp.brthdt || '');
+      setRetFormDoj(selectedEmp.compjoindt || '');
+      setRetFormDor(selectedEmp.dtofretir || '');
+      setRetFormBasic(selectedEmp.basic || 0);
+      setRetFormDa(daPercentage || 50);
+      setRetDobConfirmed(true);
+      setRetDojConfirmed(true);
+      setRetDorConfirmed(true);
+      setIsRetirementVerified(false); // DO NOT open retirement calculator directly!
+    }
+  }, [selectedEmp]);
   
   // Dashboard stats
   const [totalEmployees, setTotalEmployees] = useState(58417);
@@ -250,6 +304,15 @@ export default function AdminWorkspace() {
           setScalesCount(data.payScales?.length || 105);
         }
 
+        // Fetch current user
+        try {
+          const authRes = await fetch('/api/auth/me');
+          if (authRes.ok) {
+            const data = await authRes.json();
+            if (data.success && data.user) setCurrentUser(data.user);
+          }
+        } catch (e) {}
+
         // Fetch metadata dropdown lists
         const metaRes = await fetch('/api/metadata');
         if (metaRes.ok) {
@@ -257,6 +320,9 @@ export default function AdminWorkspace() {
           setLocations(data.locations || []);
           setDesignations(data.designations || []);
           setPosts(data.posts || []);
+          setAllZones(data.zones || []);
+          setAllCircles(data.circles || []);
+          setAllDivisions(data.divisions || []);
         }
 
         // Fetch hierarchy list for Seniority tool
@@ -288,13 +354,86 @@ export default function AdminWorkspace() {
       if (res.ok) {
         const data = await res.json();
         setEmployees(data.employees || []);
-        setActiveTab('employees');
+        if (!['employees', 'go74', 'increment', 'seniority', 'leaves', 'retirement'].includes(activeTab)) {
+          setActiveTab('employees');
+        }
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchEmployeesByScope = async (key: string, value?: string) => {
+    setLoading(true);
+    try {
+      let url = '/api/employees?limit=50';
+      if (key !== 'all' && value) {
+        url += `&${key}=${encodeURIComponent(value)}`;
+      }
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setEmployees(data.employees || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFetchRetirList = async () => {
+    if (!retirMonthFilter) return;
+    setRetirListLoading(true);
+    try {
+      const url = new URL(`/api/employees/retired`, window.location.origin);
+      url.searchParams.set('month', retirMonthFilter);
+      if (retirZoneFilter) url.searchParams.set('zone', retirZoneFilter);
+      
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const data = await res.json();
+        setRetirListEmployees(data.employees || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRetirListLoading(false);
+    }
+  };
+
+  const handleExportRetirExcel = () => {
+    if (retirListEmployees.length === 0) return;
+    
+    // Format DD-MM-YYYY
+    const formatDt = (dt: string | null | undefined) => {
+      if (!dt) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) {
+        const [y, m, d] = dt.split('-');
+        return `${d}-${m}-${y}`;
+      }
+      return dt;
+    };
+
+    const headers = ['CPF No', 'Name', 'Designation', 'Location', 'Date of Birth', 'Retirement Date', 'Circle'];
+    const rows = retirListEmployees.map(emp => [
+      emp.empno,
+      emp.empnm || '',
+      emp.desigz || '',
+      emp.divnm || emp.locnm || '',
+      formatDt(emp.brthdt),
+      formatDt(emp.dtofretir),
+      emp.circl || ''
+    ]);
+    
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Retired Employees");
+    
+    XLSX.writeFile(wb, `retired_employees_${retirMonthFilter || 'all'}.xlsx`);
   };
 
   const handleGenerateSeniority = async () => {
@@ -644,90 +783,6 @@ export default function AdminWorkspace() {
     setNewTransType(trans.transfer_type || 'Internal');
   };
 
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingExcel(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-        
-        if (!data || data.length === 0) {
-          alert('No data found in Excel file.');
-          setIsUploadingExcel(false);
-          return;
-        }
-
-        // Map to API format. Assuming headers exactly match the Prisma schema.
-        // We ensure empno is always string.
-        const bulkPayload = data
-          .map((row: any) => {
-            const rowEmpno = row.empno || row.EMPNO || row.EmpNo || row['Employee No'];
-            if (!rowEmpno) return null; // Skip invalid rows
-            
-            // We just pass the row exactly as read. The API's update query will update any matching fields.
-            // But let's only pick string properties or convert numbers to strings except for known float/int fields.
-            // To be safe, we just pass row without empno.
-            const empData = { ...row };
-            delete empData.empno;
-            delete empData.EMPNO;
-            delete empData.EmpNo;
-            delete empData['Employee No'];
-
-            // Clean up potentially problematic fields from Excel
-            Object.keys(empData).forEach(key => {
-              if (empData[key] === null || empData[key] === undefined || empData[key] === '') {
-                delete empData[key];
-              }
-            });
-
-            return {
-              empno: String(rowEmpno),
-              data: empData
-            };
-          })
-          .filter(Boolean);
-
-        if (bulkPayload.length === 0) {
-          alert('No valid rows found. Please ensure there is a column named "empno" or "Employee No".');
-          setIsUploadingExcel(false);
-          return;
-        }
-
-        // Send to API
-        const response = await fetch('/api/employees', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bulk: bulkPayload })
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-          alert(`Successfully updated ${result.count} employee records!`);
-          // optionally refresh current view
-          handleSearch();
-        } else {
-          alert('Error updating employees: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error processing Excel file:', error);
-        alert('Failed to process Excel file.');
-      } finally {
-        setIsUploadingExcel(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    };
-    reader.readAsBinaryString(file);
-  };
-
   const handleSignOut = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -937,9 +992,14 @@ export default function AdminWorkspace() {
   }
 
   if (retirementPrintMode && selectedEmp) {
-    const daAmount = Math.round(selectedEmp.basic * (daPercentage / 100));
-    const totalEmoluments = selectedEmp.basic + daAmount;
-    const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(selectedEmp.compjoindt, selectedEmp.dtofretir);
+    const basicUse = retFormBasic || selectedEmp.basic;
+    const daPctUse = retFormDa !== undefined ? retFormDa : daPercentage;
+    const dojUse = retFormDoj || selectedEmp.compjoindt;
+    const dorUse = retFormDor || selectedEmp.dtofretir;
+
+    const daAmount = Math.round(basicUse * (daPctUse / 100));
+    const totalEmoluments = basicUse + daAmount;
+    const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(dojUse, dorUse);
     const calculatedGratuity = (totalEmoluments * 15 / 26) * qYears;
     const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
 
@@ -989,14 +1049,14 @@ export default function AdminWorkspace() {
             </tr>
             <tr>
               <td><strong>Joining Date:</strong></td>
-              <td>{selectedEmp.compjoindt}</td>
+              <td>{dojUse}</td>
               <td><strong>Retirement Date:</strong></td>
-              <td>{selectedEmp.dtofretir}</td>
+              <td>{dorUse}</td>
             </tr>
             <tr>
               <td><strong>Basic Pay:</strong></td>
-              <td>₹{selectedEmp.basic.toLocaleString()}</td>
-              <td><strong>Current DA ({daPercentage}%):</strong></td>
+              <td>₹{basicUse.toLocaleString()}</td>
+              <td><strong>Current DA ({daPctUse}%):</strong></td>
               <td>₹{daAmount.toLocaleString()}</td>
             </tr>
             <tr>
@@ -1077,9 +1137,9 @@ export default function AdminWorkspace() {
   return (
     <div className="workspace-container">
       {/* Sidebar Panel */}
-      <aside className="workspace-sidebar">
+      <aside className="workspace-sidebar" style={{ display: activeTab === 'dashboard' ? 'flex' : 'none' }}>
         <div className="sidebar-brand">
-          <div className="brand-logo">🏛️</div>
+          <img src="/hr_icon.ico" alt="HRMS Logo" className="brand-logo" style={{ width: '2.25rem', height: '2.25rem', objectFit: 'contain', backgroundColor: '#ffffff', borderRadius: '0.5rem', padding: '0.15rem' }} />
           <div>
             <h3>PZHR Web System</h3>
             <span>Pune Zone HR Console</span>
@@ -1102,33 +1162,32 @@ export default function AdminWorkspace() {
           <button className={`menu-item ${activeTab === 'seniority' ? 'active' : ''}`} onClick={() => setActiveTab('seniority')}>
             <span>🎖️</span> Seniority List
           </button>
-          <button className={`menu-item ${activeTab === 'leaves' ? 'active' : ''}`} onClick={() => setActiveTab('leaves')}>
-            <span>📅</span> Leave Records
-          </button>
           <button className={`menu-item ${activeTab === 'retirement' ? 'active' : ''}`} onClick={() => setActiveTab('retirement')}>
             <span>🏖</span> Retirement Claims
           </button>
-          <button className={`menu-item ${activeTab === 'payscales' ? 'active' : ''}`} onClick={() => setActiveTab('payscales')}>
-            <span>💰</span> Pay Scales circulars
-          </button>
-          <button className={`menu-item ${activeTab === 'maintain_da' ? 'active' : ''}`} onClick={() => setActiveTab('maintain_da')}>
-            <span>📈</span> Maintain DA Rates
+          <button className={`menu-item ${activeTab === 'misc_data' ? 'active' : ''}`} onClick={() => setActiveTab('misc_data')}>
+            <span>📁</span> Misc Data
           </button>
           <button className={`menu-item ${activeTab === 'roster' ? 'active' : ''}`} onClick={() => setActiveTab('roster')}>
             <span>📊</span> Backlog Roster
           </button>
           <button className={`menu-item ${activeTab === 'vacancy' ? 'active' : ''}`} onClick={() => setActiveTab('vacancy')}>
-            <span>🏢</span> Vacancy & Transfers
+            <span>🏢</span> Vacancy Ledger
           </button>
-          <button className={`menu-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-            <span>👥</span> User Management
+          <button className={`menu-item ${activeTab === 'transfers' ? 'active' : ''}`} onClick={() => setActiveTab('transfers')}>
+            <span>🔄</span> Transfer & Promotion
           </button>
+          {currentUser?.isSuperAdmin && (
+            <button className={`menu-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+              <span>👥</span> User Management
+            </button>
+          )}
         </nav>
 
         <div className="sidebar-profile">
           <div className="profile-details">
-            <span className="profile-name">Nagesh D.M</span>
-            <span className="profile-role">Head Clerk - CPF 02266083</span>
+            <span className="profile-name">{currentUser ? currentUser.full_name || 'Admin User' : 'Loading...'}</span>
+            <span className="profile-role">CPF {currentUser ? currentUser.username : '---'}</span>
           </div>
           <button className="logout-button" onClick={handleSignOut}>Log Out</button>
         </div>
@@ -1139,12 +1198,33 @@ export default function AdminWorkspace() {
         
         {/* HEADER BAR */}
         <header className="workspace-header">
-          <div>
-            <h2>{activeTab.toUpperCase().replace('_', ' ')} Workspace</h2>
-            <p>Active Scope: Pune Zone HR Operations</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            {activeTab !== 'dashboard' && (
+              <button 
+                onClick={() => setActiveTab('dashboard')} 
+                style={{
+                  background: 'rgba(56, 189, 248, 0.2)', 
+                  border: '1px solid var(--primary-accent)', 
+                  color: 'var(--primary-accent)', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  cursor: 'pointer', 
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>⬅</span> Back to Dashboard
+              </button>
+            )}
+            <div>
+              <h2>{activeTab.toUpperCase().replace('_', ' ')} Workspace</h2>
+              <p>Active Scope: {currentUser ? ([currentUser.zonenm, currentUser.circl, currentUser.divnm, currentUser.subdnm].filter(Boolean).join(' / ') || 'Global Scope') : 'Loading...'}</p>
+            </div>
           </div>
           <div className="header-actions">
-            {activeTab === 'employees' && (
+            {['employees', 'go74', 'increment', 'seniority', 'leaves', 'retirement'].includes(activeTab) && (
               <>
                 <input
                   type="text"
@@ -1224,23 +1304,58 @@ export default function AdminWorkspace() {
                 <div className="directory-list-panel">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <h3 style={{ margin: 0 }}>Employees Directory ({employees.length} shown)</h3>
-                    <div>
-                      <input 
-                        type="file" 
-                        accept=".xlsx, .xls" 
-                        ref={fileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={handleExcelUpload}
-                      />
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingExcel}
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#10b981', border: 'none', borderRadius: '0.25rem', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
-                      >
-                        {isUploadingExcel ? 'Uploading...' : '📁 Bulk Update (Excel)'}
-                      </button>
-                    </div>
+                    <ExcelUpload onUploadComplete={handleSearch} />
                   </div>
+
+                  {/* Scope Hierarchy Filters */}
+                  {currentUser && (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '15px', flexWrap: 'wrap', padding: '10px', background: 'rgba(15,23,42,0.4)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#cbd5e1', alignSelf: 'center', marginRight: '5px' }}>📍 Filter by Your Scope:</span>
+                      
+                      <button 
+                        onClick={() => fetchEmployeesByScope('all')}
+                        className="btn-ghost"
+                        style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
+                        All My Scope
+                      </button>
+
+                      {currentUser.zonenm && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('zonenm', currentUser.zonenm)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Zone: {currentUser.zonenm}
+                        </button>
+                      )}
+                      
+                      {currentUser.circl && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('circl', currentUser.circl)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Circle: {currentUser.circl}
+                        </button>
+                      )}
+                      
+                      {currentUser.divnm && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('divnm', currentUser.divnm)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Division: {currentUser.divnm}
+                        </button>
+                      )}
+                      
+                      {currentUser.subdnm && (
+                        <button 
+                          onClick={() => fetchEmployeesByScope('subdnm', currentUser.subdnm)}
+                          className="btn-ghost"
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid rgba(148,163,184,0.3)', color: '#e2e8f0', background: 'transparent' }}>
+                          Sub Div: {currentUser.subdnm}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="employee-table-scroll">
                     <table className="workspace-table">
                       <thead>
@@ -1272,7 +1387,14 @@ export default function AdminWorkspace() {
                       <div className="profile-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <h4>Profile: {selectedEmp.empnm}</h4>
-                          <span className="badge">{selectedEmp.empno}</span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                            <span className="badge">{selectedEmp.empno}</span>
+                            {selectedEmp.retir_status && (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', padding: '2px 8px', borderRadius: '12px', backgroundColor: selectedEmp.retir_status === 'Live' ? '#10b981' : '#f43f5e', color: 'white' }}>
+                                {selectedEmp.retir_status} {selectedEmp.dtofretir ? `(${selectedEmp.dtofretir})` : ''}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <button onClick={() => setBiodataPrintMode(true)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'var(--yellow-accent)', border: 'none', borderRadius: '0.25rem', color: 'black', cursor: 'pointer', fontWeight: 'bold' }}>
                           📄 Generate Biodata Report
@@ -1282,10 +1404,80 @@ export default function AdminWorkspace() {
                       {/* Sub Tabs Navigation */}
                       <div className="sub-tabs-nav">
                         <button className={`sub-tab-btn ${subTab === 'biodata' ? 'active' : ''}`} onClick={() => setSubTab('biodata')}>Biodata & Stay</button>
+                        <button className={`sub-tab-btn ${subTab === 'location' ? 'active' : ''}`} onClick={() => setSubTab('location')}>Current Location</button>
                         <button className={`sub-tab-btn ${subTab === 'service' ? 'active' : ''}`} onClick={() => setSubTab('service')}>Service & Deemed</button>
                         <button className={`sub-tab-btn ${subTab === 'increment' ? 'active' : ''}`} onClick={() => setSubTab('increment')}>Increments</button>
                         <button className={`sub-tab-btn ${subTab === 'career' ? 'active' : ''}`} onClick={() => setSubTab('career')}>Career Logs</button>
                       </div>
+
+                      {/* SUB TAB LOCATION: CURRENT LOCATION */}
+                      {subTab === 'location' && (
+                        <div className="form-grid-col2 animate-fade">
+                          <div className="form-group" style={{ gridColumn: 'span 2', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.25rem', marginBottom: '0.25rem' }}>
+                            <h5 style={{ margin: '0 0 0.25rem 0', color: 'var(--primary-accent)' }}>Current Posting Location</h5>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Zone</label>
+                            <select 
+                              value={selectedEmp.zonenm || ''} 
+                              onChange={(e) => setSelectedEmp({ ...selectedEmp, zonenm: e.target.value })}
+                              style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
+                            >
+                              <option value="">-- Select Zone --</option>
+                              {allZones.map(z => (
+                                <option key={z} value={z}>{z}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Circle</label>
+                            <select 
+                              value={selectedEmp.circl || ''} 
+                              onChange={(e) => setSelectedEmp({ ...selectedEmp, circl: e.target.value })}
+                              style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
+                            >
+                              <option value="">-- Select Circle --</option>
+                              {allCircles.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Division</label>
+                            <select 
+                              value={selectedEmp.divnm || ''} 
+                              onChange={(e) => setSelectedEmp({ ...selectedEmp, divnm: e.target.value })}
+                              style={{ width: '100%', padding: '0.5rem', background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.15)', color: '#ffffff', borderRadius: '0.375rem' }}
+                            >
+                              <option value="">-- Select Division --</option>
+                              {allDivisions.map(d => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div className="form-group">
+                            <label>Location Code / Name</label>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
+                              <input 
+                                type="text" 
+                                value={selectedEmp.loccode || ''} 
+                                onChange={(e) => setSelectedEmp({ ...selectedEmp, loccode: e.target.value })} 
+                                placeholder="e.g. LOC101 (Code)"
+                              />
+                              <input 
+                                type="text" 
+                                value={selectedEmp.locnm || ''} 
+                                onChange={(e) => setSelectedEmp({ ...selectedEmp, locnm: e.target.value })} 
+                                placeholder="e.g. Main Office Building (Name)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* SUB TAB 1: BIODATA & STAY */}
                       {subTab === 'biodata' && (
@@ -1363,7 +1555,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Validity Date</label>
-                            <input type="date" value={selectedEmp.caste_validity_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, caste_validity_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.caste_validity_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, caste_validity_dt: e.target.value })} />
                           </div>
 
                           <div className="form-group" style={{ gridColumn: 'span 2', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.25rem', marginBottom: '0.25rem', marginTop: '0.5rem' }}>
@@ -1388,19 +1580,19 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>1st Appointment Date</label>
-                            <input type="date" value={selectedEmp.first_appointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, first_appointment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.first_appointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, first_appointment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Date of Joining (1st Join Date)</label>
-                            <input type="date" value={selectedEmp.compjoindt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, compjoindt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.compjoindt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, compjoindt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Date of Retirement</label>
-                            <input type="date" value={selectedEmp.dtofretir || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, dtofretir: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.dtofretir || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, dtofretir: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Deemed Date of Promotion</label>
-                            <input type="date" value={selectedEmp.deem_date_prom || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, deem_date_prom: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.deem_date_prom || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, deem_date_prom: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Active Pay Scale Circular</label>
@@ -1413,7 +1605,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Absorption Date (for Sahayyak / Temp)</label>
-                            <input type="date" value={selectedEmp.absorption_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, absorption_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.absorption_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, absorption_dt: e.target.value })} />
                           </div>
 
                           <div className="form-group" style={{ gridColumn: 'span 2', borderTop: '1px solid var(--border-glass)', paddingTop: '1rem', marginTop: '0.5rem' }}>
@@ -1421,7 +1613,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Re-appointment Date</label>
-                            <input type="date" value={selectedEmp.reappointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, reappointment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.reappointment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, reappointment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Internal Recruitment / Cadre Status</label>
@@ -1433,7 +1625,7 @@ export default function AdminWorkspace() {
                           </div>
                           <div className="form-group">
                             <label>Date of Refusal</label>
-                            <input type="date" value={selectedEmp.prom_refused_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, prom_refused_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.prom_refused_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, prom_refused_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Reason for Refusal</label>
@@ -1451,11 +1643,11 @@ export default function AdminWorkspace() {
                         <div className="form-grid-col2 animate-fade">
                           <div className="form-group">
                             <label>Last Increment Date</label>
-                            <input type="date" value={selectedEmp.last_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, last_increment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.last_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, last_increment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Next Increment Due Date</label>
-                            <input type="date" value={selectedEmp.next_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, next_increment_dt: e.target.value })} />
+                            <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={selectedEmp.next_increment_dt || ''} onChange={(e) => setSelectedEmp({ ...selectedEmp, next_increment_dt: e.target.value })} />
                           </div>
                           <div className="form-group">
                             <label>Suspension Days</label>
@@ -1498,8 +1690,8 @@ export default function AdminWorkspace() {
                               <form onSubmit={handleAddPromotion} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingPromId ? 'Edit Promotion' : 'Record Promotion'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                                  <input type="date" value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
-                                  <input type="date" value={newPromJoinDate} onChange={(e) => setNewPromJoinDate(e.target.value)} placeholder="Join Date" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                  <input type="text" maxLength={10} value={newPromDate} onChange={(e) => setNewPromDate(e.target.value)} required placeholder="Order Date (DD-MM-YYYY)" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                  <input type="text" maxLength={10} value={newPromJoinDate} onChange={(e) => setNewPromJoinDate(e.target.value)} placeholder="Join Date (DD-MM-YYYY)" style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                 </div>
                                 <select value={newPromToDesig} onChange={(e) => setNewPromToDesig(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
                                   <option value="">-- Select Post ({currentDesig?.cat || 'All'} category) --</option>
@@ -1543,7 +1735,7 @@ export default function AdminWorkspace() {
                               <form onSubmit={handleAddTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(30,41,59,0.5)', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 600 }}>{editingTransferId ? 'Edit Transfer' : 'Record Transfer'}</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                                  <input type="date" value={newTransDate} onChange={(e) => setNewTransDate(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }} title="Transfer Order Date" />
+                                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newTransDate} onChange={(e) => setNewTransDate(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }} title="Transfer Order Date" />
                                   <select value={newTransType} onChange={(e) => setNewTransType(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
                                     <option value="Regular">Regular Transfer</option>
                                     <option value="Mutual">Mutual Transfer</option>
@@ -1575,11 +1767,11 @@ export default function AdminWorkspace() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                     <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Transferred From Date</span>
-                                    <input type="date" value={newTransFromDate} onChange={(e) => setNewTransFromDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                    <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newTransFromDate} onChange={(e) => setNewTransFromDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                     <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Joined To Date</span>
-                                    <input type="date" value={newTransToDate} onChange={(e) => setNewTransToDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
+                                    <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newTransToDate} onChange={(e) => setNewTransToDate(e.target.value)} style={{ fontSize: '0.72rem', padding: '0.25rem' }} />
                                   </div>
                                 </div>
                                 <select value={newTransToDesig} onChange={(e) => setNewTransToDesig(e.target.value)} required style={{ fontSize: '0.72rem', padding: '0.25rem' }}>
@@ -2007,7 +2199,7 @@ export default function AdminWorkspace() {
                             </td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.casteValidityDate || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_castvaldt_${emp.empNo}`}
@@ -2017,7 +2209,7 @@ export default function AdminWorkspace() {
                             <td>{emp.promotionJoiningDate || ''}</td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.transferDate || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_transdt_${emp.empNo}`}
@@ -2034,7 +2226,7 @@ export default function AdminWorkspace() {
                             <td>{emp.transferFromZoneCircle || ''}</td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.dateJoinedCompany || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_compjoindt_${emp.empNo}`}
@@ -2042,7 +2234,7 @@ export default function AdminWorkspace() {
                             </td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.presentPostJoiningDate || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_ppljoindt_${emp.empNo}`}
@@ -2053,7 +2245,7 @@ export default function AdminWorkspace() {
                             </td>
                             <td>
                               <input 
-                                type="date" 
+                                type="text" placeholder="DD-MM-YYYY" maxLength={10} 
                                 defaultValue={convertDisplayDateToInput(emp.dateOfBirth || '')} 
                                 style={{ width: '110px', padding: '0.2rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)', borderRadius: '3px' }}
                                 id={`sen_brthdt_${emp.empNo}`}
@@ -2076,8 +2268,18 @@ export default function AdminWorkspace() {
             </div>
           )}
 
-          {/* TAB 6: LEAVE RECORDS */}
-          {activeTab === 'leaves' && (
+          {/* TAB: MISC DATA SUB-TABS */}
+          {activeTab === 'misc_data' && (
+            <div className="sub-tabs-nav" style={{ marginBottom: '1.5rem', background: 'rgba(30, 41, 59, 0.5)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
+              <button className={`sub-tab-btn ${miscSubTab === 'leaves' ? 'active' : ''}`} onClick={() => setMiscSubTab('leaves')}>Leave Records</button>
+              <button className={`sub-tab-btn ${miscSubTab === 'payscales' ? 'active' : ''}`} onClick={() => setMiscSubTab('payscales')}>Pay Circulars</button>
+              <button className={`sub-tab-btn ${miscSubTab === 'maintain_da' ? 'active' : ''}`} onClick={() => setMiscSubTab('maintain_da')}>Maintain DA Rates</button>
+              <button className={`sub-tab-btn ${miscSubTab === 'retir_list' ? 'active' : ''}`} onClick={() => setMiscSubTab('retir_list')}>Retir Emp List</button>
+            </div>
+          )}
+
+          {/* SUB-TAB: LEAVE RECORDS */}
+          {activeTab === 'misc_data' && miscSubTab === 'leaves' && (
             <div className="leaves-view animate-fade">
               {selectedEmp ? (
                 <div className="leaves-workspace">
@@ -2107,11 +2309,11 @@ export default function AdminWorkspace() {
                         </div>
                         <div className="form-group">
                           <label>From Date</label>
-                          <input type="date" value={newLeaveFrom} onChange={(e) => setNewLeaveFrom(e.target.value)} required />
+                          <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newLeaveFrom} onChange={(e) => setNewLeaveFrom(e.target.value)} required />
                         </div>
                         <div className="form-group">
                           <label>To Date</label>
-                          <input type="date" value={newLeaveTo} onChange={(e) => setNewLeaveTo(e.target.value)} required />
+                          <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newLeaveTo} onChange={(e) => setNewLeaveTo(e.target.value)} required />
                         </div>
                         <div className="form-group">
                           <label>Leave Duration (Days)</label>
@@ -2171,99 +2373,286 @@ export default function AdminWorkspace() {
                 <div className="retirement-workspace">
                   <div className="emp-summary-header">
                     <h4>🏝️ Post-Retirement Claims Calculator</h4>
-                    <p>{selectedEmp.empnm} ({selectedEmp.empno}) &bull; Last Basic Pay: ₹{selectedEmp.basic.toLocaleString()}</p>
+                    <p style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                      <span><strong>{selectedEmp.empnm}</strong> ({selectedEmp.empno}) &bull; Last Basic Pay: ₹{selectedEmp.basic.toLocaleString()}</span>
+                      {selectedEmp.retir_status && (
+                        <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold', backgroundColor: selectedEmp.retir_status === 'Live' ? '#d1fae5' : '#ffe4e6', color: selectedEmp.retir_status === 'Live' ? '#065f46' : '#9f1239' }}>
+                          {selectedEmp.retir_status}
+                        </span>
+                      )}
+                    </p>
+                    <p style={{ fontSize: '0.9rem', color: '#64748b', display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      <span><strong>DOB:</strong> {selectedEmp.brthdt || '-'}</span>
+                      <span><strong>DOJ (Company):</strong> {selectedEmp.compjoindt || '-'}</span>
+                      <span><strong>Retirement:</strong> {selectedEmp.dtofretir || '-'}</span>
+                    </p>
                   </div>
 
-                  <div className="claims-controls">
-                    <div className="inputs-row">
-                      <div className="form-group">
-                        <label>Current DA Percentage (%)</label>
-                        <input
-                          type="number"
-                          value={daPercentage}
-                          onChange={(e) => setDaPercentage(parseFloat(e.target.value) || 0)}
-                        />
+                  {!isRetirementVerified ? (
+                    <div className="retirement-verification-box" style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '24px', backdropFilter: 'blur(10px)', marginTop: '16px' }}>
+                      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px', marginBottom: '20px' }}>
+                        <h3 style={{ margin: '0 0 8px 0', color: '#38bdf8', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          📋 Step 1: Pre-Calculation Service & Salary Verification
+                        </h3>
+                        <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.875rem' }}>
+                          Retirement calculation is not opened directly. Please verify and confirm whether Date of Birth, Joining Date in company, Retirement Date, Last Basic Pay, and DA Rate are correct in database before showing the calculation.
+                        </p>
                       </div>
-                      <div className="form-group">
-                        <label>Statutory Gratuity Limit (₹)</label>
-                        <input
-                          type="number"
-                          value={statutoryLimit}
-                          onChange={(e) => setStatutoryLimit(parseFloat(e.target.value) || 0)}
-                        />
-                      </div>
-                    </div>
 
-                    {/* Calculations Summary */}
-                    {(() => {
-                      const daAmount = Math.round(selectedEmp.basic * (daPercentage / 100));
-                      const totalEmoluments = selectedEmp.basic + daAmount;
-                      const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(selectedEmp.compjoindt, selectedEmp.dtofretir);
-                      const calculatedGratuity = (totalEmoluments * 15 / 26) * qYears;
-                      const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
-
-                      // LAP Encashment
-                      const lapDays = parseFloat(retLAPDays) || 0;
-                      const lapAmount = (totalEmoluments * lapDays) / 30;
-
-                      // COM Encashment
-                      const comDays = parseFloat(retCOMDays) || 0;
-                      const comAmount = (totalEmoluments * comDays) / 30;
-
-                      return (
-                        <div className="claims-results-grid">
+                      <form onSubmit={(e) => { e.preventDefault(); setIsRetirementVerified(true); }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
                           
-                          <div className="claim-item-result">
-                            <h4>🏛️ Gratuity Claims</h4>
-                            <p title={qYearsText}>Qualifying Service: {qYears} Years</p>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; 15 &divide; 26) &times; {qYears} years</p>
-                            <h3>₹{finalGratuity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
-                            {calculatedGratuity > statutoryLimit && <span className="warning-note">Capped at limit of ₹{statutoryLimit.toLocaleString()}</span>}
-                          </div>
-
-                          <div className="claim-item-result">
-                            <h4>🏖️ LAP Leave Encashment</h4>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
-                              <label style={{ fontSize: '0.75rem' }}>Capped Days:</label>
-                              <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                          {/* Date of Birth Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              1. Date of Birth (DOB)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Value: <strong style={{ color: '#38bdf8' }}>{selectedEmp.brthdt || 'Not specified'}</strong>
                             </div>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays}) &divide; 30</p>
-                            <h3>₹{lapAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            <input
+                              type="text"
+                              placeholder="DD.MM.YYYY or YYYY-MM-DD"
+                              value={retFormDob}
+                              onChange={(e) => setRetFormDob(e.target.value)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem', marginBottom: '8px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={retDobConfirmed}
+                                onChange={(e) => setRetDobConfirmed(e.target.checked)}
+                              />
+                              <span>Verified: Date of Birth is correct in database</span>
+                            </label>
                           </div>
 
-                          <div className="claim-item-result">
-                            <h4>🏥 COM Leave Encashment</h4>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
-                              <label style={{ fontSize: '0.75rem' }}>Capped Days:</label>
-                              <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                          {/* Company Joining Date Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              2. Company Joining Date (DOJ)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Value: <strong style={{ color: '#38bdf8' }}>{selectedEmp.compjoindt || 'Not specified'}</strong>
                             </div>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays}) &divide; 30</p>
-                            <h3>₹{comAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            <input
+                              type="text"
+                              placeholder="DD.MM.YYYY or YYYY-MM-DD"
+                              value={retFormDoj}
+                              onChange={(e) => setRetFormDoj(e.target.value)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem', marginBottom: '8px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={retDojConfirmed}
+                                onChange={(e) => setRetDojConfirmed(e.target.checked)}
+                              />
+                              <span>Verified: Joining Date in company is correct in database</span>
+                            </label>
                           </div>
 
-                          <div className="total-package-card">
-                            <h3>Combined Settlement Package:</h3>
-                            <h2>₹{(finalGratuity + lapAmount + comAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
-                            <button className="download-docx-order-btn" onClick={() => setRetirementPrintMode(true)}>
-                              📄 Print Claim Order
-                            </button>
+                          {/* Retirement Date Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              3. Date of Retirement (DOR)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Value: <strong style={{ color: '#38bdf8' }}>{selectedEmp.dtofretir || 'Not specified'}</strong>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="DD.MM.YYYY or YYYY-MM-DD"
+                              value={retFormDor}
+                              onChange={(e) => setRetFormDor(e.target.value)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem', marginBottom: '8px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={retDorConfirmed}
+                                onChange={(e) => setRetDorConfirmed(e.target.checked)}
+                              />
+                              <span>Verified: Date of retirement is correct in database</span>
+                            </label>
+                          </div>
+
+                          {/* Last Basic Pay Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              4. Last Month Basic Pay (₹)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Basic: <strong style={{ color: '#38bdf8' }}>₹{selectedEmp.basic?.toLocaleString() || '0'}</strong>
+                            </div>
+                            <input
+                              type="number"
+                              value={retFormBasic}
+                              onChange={(e) => setRetFormBasic(parseFloat(e.target.value) || 0)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem' }}
+                            />
+                          </div>
+
+                          {/* DA Rate Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              5. Dearness Allowance (DA %)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              Current DA Rate: <strong style={{ color: '#38bdf8' }}>{retFormDa}%</strong>
+                            </div>
+                            <input
+                              type="number"
+                              value={retFormDa}
+                              onChange={(e) => setRetFormDa(parseFloat(e.target.value) || 0)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem' }}
+                            />
+                          </div>
+
+                          {/* Statutory Limit */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              6. Statutory Gratuity Limit (₹)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              Standard Cap: <strong style={{ color: '#38bdf8' }}>₹20,00,000</strong>
+                            </div>
+                            <input
+                              type="number"
+                              value={statutoryLimit}
+                              onChange={(e) => setStatutoryLimit(parseFloat(e.target.value) || 0)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem' }}
+                            />
                           </div>
 
                         </div>
-                      );
-                    })()}
-                  </div>
+
+                        <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          <button
+                            type="submit"
+                            style={{ padding: '12px 32px', fontSize: '1rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}
+                          >
+                            ⚡ Verify Data & Show Retirement Calculation
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="claims-controls">
+                      <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '12px 20px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+                        <div style={{ fontSize: '0.875rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span>✓ Verified Employee Parameters Active:</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DOB: {retFormDob || '-'}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DOJ: {retFormDoj || '-'}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DOR: {retFormDor || '-'}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>Basic: ₹{retFormBasic.toLocaleString()}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DA: {retFormDa}%</span>
+                        </div>
+                        <button
+                          onClick={() => setIsRetirementVerified(false)}
+                          style={{ padding: '6px 14px', background: '#334155', color: '#f8fafc', border: '1px solid #475569', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 500 }}
+                        >
+                          ✏️ Edit / Re-Verify Data
+                        </button>
+                      </div>
+
+                      {/* Calculations Summary */}
+                      {(() => {
+                        const basicUse = retFormBasic || selectedEmp.basic;
+                        const daPctUse = retFormDa !== undefined ? retFormDa : daPercentage;
+                        const dojUse = retFormDoj || selectedEmp.compjoindt;
+                        const dorUse = retFormDor || selectedEmp.dtofretir;
+
+                        const daAmount = Math.round(basicUse * (daPctUse / 100));
+                        const totalEmoluments = basicUse + daAmount;
+                        const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(dojUse, dorUse);
+                        const calculatedGratuity = (totalEmoluments * 15 / 26) * qYears;
+                        const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
+
+                        // LAP Encashment
+                        const inputLapDays = parseFloat(retLAPDays) || 0;
+                        const lapDays = Math.min(inputLapDays, 300);
+                        const lapAmount = (totalEmoluments * lapDays) / 30;
+
+                        // COM Encashment
+                        const inputHplDays = parseFloat(retCOMDays) || 0;
+                        const comDays = Math.min(inputHplDays / 2, 180);
+                        const comAmount = (totalEmoluments * comDays) / 30;
+
+                        return (
+                          <div className="claims-results-grid">
+                            
+                            <div className="claim-item-result">
+                              <h4>🏛️ Gratuity Claims</h4>
+                              <p title={qYearsText}>Qualifying Service: {qYears} Years ({qYearsText})</p>
+                              <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; 15 &divide; 26) &times; {qYears} years</p>
+                              <h3>₹{finalGratuity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                              {calculatedGratuity > statutoryLimit && <span className="warning-note">Capped at limit of ₹{statutoryLimit.toLocaleString()}</span>}
+                            </div>
+
+                            <div className="claim-item-result">
+                              <h4>🏖️ LAP Leave Encashment</h4>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
+                                <label style={{ fontSize: '0.75rem' }}>Available LAP in Service (Days):</label>
+                                <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                              </div>
+                              <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays} capped at 300) &divide; 30</p>
+                              <h3>₹{lapAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            </div>
+
+                            <div className="claim-item-result">
+                              <h4>🏥 COM Leave Encashment (HPL)</h4>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
+                                <label style={{ fontSize: '0.75rem' }}>Available HPL in Service (Half Pay Days):</label>
+                                <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                              </div>
+                              <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays} equivalent full pay days) &divide; 30</p>
+                              <h3>₹{comAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            </div>
+
+                            <div className="total-package-card">
+                              <h3>Combined Settlement Package:</h3>
+                              <h2>₹{(finalGratuity + lapAmount + comAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
+                              <button className="download-docx-order-btn" onClick={() => setRetirementPrintMode(true)}>
+                                📄 Print Claim Order
+                              </button>
+                            </div>
+
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="select-placeholder">
-                  <p>Please select an employee in the <strong>Employee Master</strong> tab first to load their retirement claims modeler.</p>
+                <div className="select-placeholder" style={{display:'flex', flexDirection:'column', alignItems:'center', gap: '16px'}}>
+                  <p>Please use the main search bar above to search for an employee, or select from the results below.</p>
+                  {employees.length > 0 && (
+                    <div style={{maxHeight: '300px', overflowY: 'auto', width: '100%', maxWidth: '500px', background: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}>
+                      {employees.map(emp => (
+                        <div 
+                          key={emp.empno}
+                          onClick={() => setSelectedEmp(emp)}
+                          style={{padding: '12px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between'}}
+                        >
+                          <span style={{fontWeight: 600}}>{emp.empnm || 'Unknown'}</span>
+                          <span style={{color: '#64748b'}}>{emp.empno}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
+              {/* Embedded External Calculator */}
+              <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                <h4 style={{ marginBottom: '15px' }}>🌐 Full and Final Settlement External Calculator</h4>
+                <iframe src="https://emicalculatorapp.com/full-final-settlement-calculator.html" width="100%" height="800" title="Full and Final Settlement Calculator" style={{ border: 'none', borderRadius: '8px', background: 'white' }}></iframe>
+              </div>
             </div>
           )}
 
-          {/* TAB 8: PAY SCALES CIRCULARS */}
-          {activeTab === 'payscales' && (
+          {/* SUB-TAB: PAY SCALES CIRCULARS */}
+          {activeTab === 'misc_data' && miscSubTab === 'payscales' && (
             <div className="payscales-view animate-fade">
               <h3>💰 Registered Pay Scales Circular Roster</h3>
               <p>Below is the list of all active pay scale series and circular ranges populated directly from the PostgreSQL database.</p>
@@ -2291,8 +2680,8 @@ export default function AdminWorkspace() {
             </div>
           )}
 
-          {/* TAB 9: MAINTAIN DA RATES & GO 74 NOTIONAL ARREARS */}
-          {activeTab === 'maintain_da' && (
+          {/* SUB-TAB: MAINTAIN DA RATES & GO 74 NOTIONAL ARREARS */}
+          {activeTab === 'misc_data' && miscSubTab === 'maintain_da' && (
             <div className="maintain-da-view animate-fade" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '2rem' }}>
               {/* Left: DA rates ledger */}
               <div className="da-rates-ledger-panel">
@@ -2332,8 +2721,8 @@ export default function AdminWorkspace() {
                   style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', padding: '1rem', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
                 >
                   <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Register New DA Rate</label>
-                  <input type="date" value={newDaFrom} onChange={(e) => setNewDaFrom(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
-                  <input type="date" value={newDaTo} onChange={(e) => setNewDaTo(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
+                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newDaFrom} onChange={(e) => setNewDaFrom(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
+                  <input type="text" placeholder="DD-MM-YYYY" maxLength={10} value={newDaTo} onChange={(e) => setNewDaTo(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
                   <input type="number" placeholder="DA percentage e.g. 52" value={newDaPct} onChange={(e) => setNewDaPct(e.target.value)} required style={{ fontSize: '0.8rem', padding: '0.4rem' }} />
                   <button type="submit" className="save-btn" style={{ padding: '0.5rem', fontSize: '0.8rem' }}>Add DA Record</button>
                 </form>
@@ -2361,11 +2750,11 @@ export default function AdminWorkspace() {
                       </div>
                       <div className="form-group">
                         <label>Claim From Date</label>
-                        <input type="date" id="claim_from" defaultValue="2024-01-01" />
+                        <input type="text" placeholder="DD-MM-YYYY" maxLength={10} id="claim_from" defaultValue="2024-01-01" />
                       </div>
                       <div className="form-group">
                         <label>Claim To Date</label>
-                        <input type="date" id="claim_to" defaultValue="2024-06-30" />
+                        <input type="text" placeholder="DD-MM-YYYY" maxLength={10} id="claim_to" defaultValue="2024-06-30" />
                       </div>
                     </div>
 
@@ -2399,17 +2788,110 @@ export default function AdminWorkspace() {
             </div>
           )}
 
+          {/* SUB-TAB: RETIR EMP LIST */}
+          {activeTab === 'misc_data' && miscSubTab === 'retir_list' && (
+            <div className="retir-list-view animate-fade" style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid var(--border-glass)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div>
+                  <h3>🏖️ Retired Employees List</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Generate a comprehensive list of employees retiring in a specific month.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <select
+                    value={retirZoneFilter}
+                    onChange={(e) => setRetirZoneFilter(e.target.value)}
+                    style={{ padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)', background: 'rgba(15,23,42,0.6)', color: 'white' }}
+                  >
+                    <option value="">-- All Zones --</option>
+                    {allZones.map(z => (
+                      <option key={z} value={z}>{z}</option>
+                    ))}
+                  </select>
+                  <input 
+                    type="month" 
+                    value={retirMonthFilter} 
+                    onChange={(e) => setRetirMonthFilter(e.target.value)}
+                    style={{ padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid var(--border-glass)', background: 'rgba(15,23,42,0.6)', color: 'white' }}
+                  />
+                  <button onClick={handleFetchRetirList} className="save-btn" disabled={retirListLoading} style={{ padding: '0.5rem 1rem' }}>
+                    {retirListLoading ? 'Loading...' : 'Generate List'}
+                  </button>
+                  <button onClick={handleExportRetirExcel} className="edit-btn" disabled={retirListEmployees.length === 0} style={{ padding: '0.5rem 1rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.375rem' }}>
+                    ⬇️ Export Excel
+                  </button>
+                </div>
+              </div>
+
+              {retirListEmployees.length > 0 ? (
+                <div className="employee-table-scroll" style={{ maxHeight: '600px' }}>
+                  <table className="workspace-table">
+                    <thead>
+                      <tr>
+                        <th>CPF No</th>
+                        <th>Name</th>
+                        <th>Designation</th>
+                        <th>Location</th>
+                        <th>Date of Birth</th>
+                        <th>Retirement Date</th>
+                        <th>Circle</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retirListEmployees.map(emp => (
+                        <tr key={emp.empno}>
+                          <td>{emp.empno}</td>
+                          <td>{emp.empnm}</td>
+                          <td>{emp.desigz}</td>
+                          <td>{emp.divnm || emp.locnm || '-'}</td>
+                          <td>{emp.brthdt && /^\\d{4}-\\d{2}-\\d{2}$/.test(emp.brthdt) ? `${emp.brthdt.split('-')[2]}-${emp.brthdt.split('-')[1]}-${emp.brthdt.split('-')[0]}` : emp.brthdt}</td>
+                          <td style={{ color: 'var(--red-accent)', fontWeight: 'bold' }}>{emp.dtofretir && /^\\d{4}-\\d{2}-\\d{2}$/.test(emp.dtofretir) ? `${emp.dtofretir.split('-')[2]}-${emp.dtofretir.split('-')[1]}-${emp.dtofretir.split('-')[0]}` : emp.dtofretir}</td>
+                          <td>{emp.circl || '-'}</td>
+                          <td>
+                            <button 
+                              onClick={() => { setSelectedEmp(emp); setBiodataPrintMode(true); }}
+                              style={{ padding: '0.25rem 0.5rem', background: 'var(--blue-accent)', color: 'white', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', fontSize: '0.75rem' }}
+                            >
+                              📄 View / PDF
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="select-placeholder" style={{ padding: '2rem', border: '1px dashed var(--border-glass)', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <p>No retired employees found for the selected month, or no month selected.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB: ROSTER */}
           {activeTab === 'roster' && (
             <div className="roster-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
-              <RosterView />
+              <RosterView currentUser={currentUser} />
             </div>
           )}
 
           {/* TAB: VACANCY */}
           {activeTab === 'vacancy' && (
             <div className="vacancy-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto', backgroundColor: '#ffffff', color: '#0f172a', borderRadius: '1rem', padding: '1.5rem' }}>
-              <VacancyView />
+              <VacancyView currentUser={currentUser} />
+            </div>
+          )}
+
+          {/* TAB: TRANSFERS & PROMOTIONS */}
+          {activeTab === 'transfers' && (
+            <div className="transfers-view animate-fade" style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
+              <TransferModule 
+                zones={allZones} 
+                circles={allCircles} 
+                divisions={allDivisions} 
+                designations={designations} 
+                hierarchyData={hierarchyData}
+              />
             </div>
           )}
 

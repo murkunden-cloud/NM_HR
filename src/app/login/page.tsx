@@ -7,7 +7,7 @@ import './login.css';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [portal, setPortal] = useState<'employee' | 'admin'>('employee');
+  const [portal, setPortal] = useState<'employee' | 'admin'>('admin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +18,59 @@ export default function LoginPage() {
   const [passwordError, setPasswordError] = useState('');
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
+  
+  // Reset Password Modal State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetCpf, setResetCpf] = useState('');
+  const [resetSecret, setResetSecret] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [resetMessage, setResetMessage] = useState('');
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCpf || !resetSecret || !resetPassword) {
+      setResetStatus('error');
+      setResetMessage('All fields are required');
+      return;
+    }
+    
+    setResetStatus('loading');
+    setResetMessage('');
+
+    try {
+      const response = await fetch('/api/auth/reset-superadmin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cpf: resetCpf,
+          secret: resetSecret,
+          newPassword: resetPassword
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResetStatus('success');
+        setResetMessage(data.message || 'Password reset successfully!');
+        setTimeout(() => {
+          setShowResetModal(false);
+          setResetStatus('idle');
+          setResetMessage('');
+          setResetCpf('');
+          setResetSecret('');
+          setResetPassword('');
+        }, 2000);
+      } else {
+        setResetStatus('error');
+        setResetMessage(data.error || 'Password reset failed');
+      }
+    } catch (error) {
+      setResetStatus('error');
+      setResetMessage('An unexpected error occurred');
+    }
+  };
 
   const validateForm = () => {
     let isValid = true;
@@ -65,7 +118,7 @@ export default function LoginPage() {
         localStorage.setItem('pz_token', data.token);
         
         setTimeout(() => {
-          if (data.user?.role?.toUpperCase() === 'ADMIN' || portal === 'admin') {
+          if (portal === 'admin') {
             router.push('/admin');
           } else {
             router.push('/dashboard');
@@ -88,16 +141,16 @@ export default function LoginPage() {
         {/* Left Panel: Hero Branding & Stats (Hidden on smaller screens via CSS) */}
           <div className="login-hero">
             <div className="hero-header">
-              <div className="logo-icon">P</div>
-              <span className="logo-text">PZHR</span>
+              <img src="/hr_icon.ico" alt="HRMS Logo" style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.75rem', backgroundColor: '#ffffff', padding: '0.25rem', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)', border: '2px solid rgba(255, 255, 255, 0.1)' }} />
+              <span className="logo-text">HRMS</span>
             </div>
 
             <div className="hero-body">
               <h1 className="hero-title">
-                The future of HR <br />& Payroll is here.
+                Program Owner: Nagesh D.M
               </h1>
               <p className="hero-description">
-                Streamline your workforce, automate accurate payroll calculation, and gain powerful employee insights within a single unified workspace.
+                This HRMS program was created because the existing system was not handy for all employees. I have built this unified workspace to provide a better, more streamlined experience for everyone.
               </p>
 
               {/* Glassmorphic Stats Display */}
@@ -139,7 +192,7 @@ export default function LoginPage() {
             </div>
 
             <div className="hero-footer">
-              &copy; {new Date().getFullYear()} PZHR Inc. All rights reserved.
+              &copy; {new Date().getFullYear()} Anaconda.HR reserved...
             </div>
           </div>
 
@@ -276,7 +329,7 @@ export default function LoginPage() {
                     <div className="checkbox-custom" />
                     <span>Remember me</span>
                   </label>
-                  <a href="#" className="forgot-password" onClick={(e) => e.preventDefault()}>
+                  <a href="#" className="forgot-password" onClick={(e) => { e.preventDefault(); setShowResetModal(true); }}>
                     Forgot password?
                   </a>
                 </div>
@@ -298,8 +351,17 @@ export default function LoginPage() {
                 </button>
               </form>
 
+              {/* Credentials Hint */}
+              <div className="credentials-hint" style={{ marginTop: '20px', padding: '10px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)' }}>
+                {portal === 'employee' ? (
+                  <p style={{ margin: 0 }}><strong>Employee Portal:</strong> Use Username: <strong>guest</strong> and Password: <strong>guest1</strong></p>
+                ) : (
+                  <p style={{ margin: 0 }}><strong>Admin Portal:</strong> Please ask me on my mobile number to create an admin user.</p>
+                )}
+              </div>
+
               {/* Form Footer */}
-              <div className="form-footer">
+              <div className="form-footer" style={{ marginTop: '15px' }}>
                 Don&apos;t have an account?{' '}
                 <a href="#" className="form-footer-link" onClick={(e) => e.preventDefault()}>
                   Contact HR
@@ -316,6 +378,40 @@ export default function LoginPage() {
             </div>
           </div>
         </>
+      
+      {/* Superadmin Reset Modal */}
+      {showResetModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', color: '#333' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '1.2rem', color: '#1e3a8a' }}>Superadmin Password Reset</h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '20px' }}>This tool is only for the Super Admin (2266083) to reset their password.</p>
+            
+            {resetStatus === 'success' && <div style={{ color: '#059669', marginBottom: '15px', fontSize: '0.9rem', backgroundColor: '#d1fae5', padding: '10px', borderRadius: '6px' }}>{resetMessage}</div>}
+            {resetStatus === 'error' && <div style={{ color: '#e11d48', marginBottom: '15px', fontSize: '0.9rem', backgroundColor: '#ffe4e6', padding: '10px', borderRadius: '6px' }}>{resetMessage}</div>}
+            
+            <form onSubmit={handleResetSubmit}>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '5px' }}>CPF Number (must be 2266083)</label>
+                <input type="text" value={resetCpf} onChange={e => setResetCpf(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} disabled={resetStatus === 'loading'} />
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '5px' }}>Mobile Number OR PAN Number</label>
+                <input type="text" value={resetSecret} onChange={e => setResetSecret(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} disabled={resetStatus === 'loading'} />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '5px' }}>New Password</label>
+                <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} disabled={resetStatus === 'loading'} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowResetModal(false)} style={{ padding: '8px 16px', border: '1px solid #cbd5e1', backgroundColor: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }} disabled={resetStatus === 'loading'}>Cancel</button>
+                <button type="submit" style={{ padding: '8px 16px', border: 'none', backgroundColor: '#2563eb', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }} disabled={resetStatus === 'loading'}>
+                  {resetStatus === 'loading' ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

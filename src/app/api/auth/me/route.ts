@@ -42,16 +42,20 @@ export async function GET() {
       });
     }
 
+    const isSuperAdmin = user.username === '2266083';
+    const userRole = isSuperAdmin ? 'ADMIN' : user.role;
+
     return NextResponse.json({
       success: true,
       user: {
         username: user.username,
         full_name: user.full_name,
-        role: user.role,
-        zonenm: user.zonenm,
-        circl: user.circl,
-        divnm: user.divnm,
-        subdnm: user.subdnm,
+        role: userRole,
+        isSuperAdmin: isSuperAdmin,
+        zonenm: isSuperAdmin ? null : user.zonenm,
+        circl: isSuperAdmin ? null : user.circl,
+        divnm: isSuperAdmin ? null : user.divnm,
+        subdnm: isSuperAdmin ? null : user.subdnm,
         permissions: user.permissions
       },
       employee: employee || null,

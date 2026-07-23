@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
+import { hashPassword, verifySessionToken } from '@/lib/auth';
+import { cookies } from 'next/headers';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ username: string }> }) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('pzhr_session')?.value;
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const session = await verifySessionToken(token);
+    if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const user = await prisma.user.findUnique({ where: { username: session.sub } });
+    if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const isSuperAdmin = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    if (!isSuperAdmin) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     const { username } = await params;
     const body = await request.json();
     
@@ -34,6 +49,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ user
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ username: string }> }) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('pzhr_session')?.value;
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const session = await verifySessionToken(token);
+    if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const user = await prisma.user.findUnique({ where: { username: session.sub } });
+    if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const isSuperAdmin = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN';
+    if (!isSuperAdmin) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     const { username } = await params;
     await prisma.user.delete({
       where: { username }

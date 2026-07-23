@@ -137,6 +137,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, record: newTransfer });
     }
 
+    if (type === 'transfer_batch') {
+      const { batch } = data;
+      if (!Array.isArray(batch) || batch.length === 0) {
+        return NextResponse.json({ success: false, error: 'Empty batch array' }, { status: 400 });
+      }
+
+      const createdRecords = [];
+      for (const t of batch) {
+        const newTransfer = await prisma.transferHistory.create({
+          data: {
+            empno: t.empno,
+            transfer_date: t.transfer_date || new Date().toISOString().split('T')[0],
+            from_location: t.from_location || null,
+            to_location: t.to_location || null,
+            from_desig: t.from_desig || null,
+            to_desig: t.to_desig || null,
+            transfer_type: t.transfer_type || null,
+            order_no: t.order_no || null,
+            remarks: t.remarks || null,
+            created_dt: new Date().toISOString().split('T')[0]
+          }
+        });
+        createdRecords.push(newTransfer);
+      }
+      return NextResponse.json({ success: true, count: createdRecords.length, records: createdRecords });
+    }
+
     return NextResponse.json({ success: false, error: `Invalid transaction type: ${type}` }, { status: 400 });
 
   } catch (error) {

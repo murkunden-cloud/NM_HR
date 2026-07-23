@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import BiodataReport from '@/components/BiodataReport';
+import { useRouter } from 'next/navigation';
 
 export default function EmployeePortal() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -143,12 +145,20 @@ export default function EmployeePortal() {
                       {emp.locnm} | {emp.divnm} | {emp.circl}
                     </div>
                   </div>
-                  <button 
-                    onClick={() => handleViewBiodata(emp)}
-                    style={{ padding: '8px 16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    View Biodata
-                  </button>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      onClick={() => handleViewBiodata(emp)}
+                      style={{ padding: '8px 16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                      View Biodata
+                    </button>
+                    <button 
+                      onClick={() => router.push(`/payslip?empno=${emp.empno}`)}
+                      style={{ padding: '8px 16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                      Generate Payslip
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

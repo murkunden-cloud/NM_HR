@@ -2,6 +2,8 @@ import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
+import { cookies } from 'next/headers';
+import { verifySessionToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,8 +38,54 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Extract user session
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get('pzhr_session')?.value;
+    let userFilter: any = {};
+    let empFilter: any = {};
+    
+    if (sessionToken) {
+      const payload = verifySessionToken(sessionToken);
+      if (payload && payload.sub) {
+        const username = payload.sub;
+        const user = await prisma.user.findUnique({ where: { username } });
+        if (user) {
+          const isAdminAccount = ['2266083', '2232590'].includes(user.username) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+          if (!isAdminAccount) {
+            let hasFilter = false;
+            if (user.zonenm && user.zonenm.trim() !== '') {
+              empFilter.zonenm = user.zonenm;
+              hasFilter = true;
+            }
+            if (user.circl && user.circl.trim() !== '') {
+              userFilter.circle = user.circl;
+              empFilter.circl = user.circl;
+              hasFilter = true;
+            }
+            if (user.divnm && user.divnm.trim() !== '') {
+              userFilter.division = user.divnm;
+              empFilter.divnm = user.divnm;
+              hasFilter = true;
+            }
+            if (user.subdnm && user.subdnm.trim() !== '') {
+              empFilter.subdnm = user.subdnm;
+              hasFilter = true;
+            }
+            
+            if (!hasFilter) {
+              // Enforce no access if not admin and no specific location assigned
+              userFilter.circle = 'NONE_ASSIGNED';
+              empFilter.circl = 'NONE_ASSIGNED';
+            }
+          }
+        }
+      }
+    }
+
     // 1. Get Sanctioned Posts from database
-    const sanctionedRecords = await prisma.sanctionedPost.findMany();
+    const sanctionedRecords = await prisma.sanctionedPost.findMany({
+      where: userFilter
+    });
     
     const sanctionMap = new Map();
     for (const record of sanctionedRecords) {
@@ -60,6 +108,7 @@ export async function GET(req: NextRequest) {
     
     // 2. Calculate Filled Posts from Employees table
     const employees = await prisma.employee.findMany({
+      where: empFilter,
       select: {
         circl: true,
         divnm: true,

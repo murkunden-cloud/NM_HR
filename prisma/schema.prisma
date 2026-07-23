@@ -304,3 +304,21 @@ model GuestSession {
 
   @@map("guest_sessions")
 }
+
+model VacancyLocation {
+  id          Int     @id @default(autoincrement())
+  region      String?
+  zone        String?
+  circle      String?
+  division    String?
+  subdivision String?
+  orgname     String?
+  cadre       String?
+  paygroup    String?
+  type        String?
+  designation String?
+  sanctioned  Int     @default(0)
+  filled_in   Int     @default(0)
+
+  @@map("vacancy_locations")
+}

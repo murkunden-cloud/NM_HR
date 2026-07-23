@@ -34,7 +34,7 @@ interface LeaveRecord {
 export default function EmployeeDashboard() {
   const router = useRouter();
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'search'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'search' | 'payslip'>('profile');
   
   const [user, setUser] = useState<UserInfo | null>(null);
   const [employee, setEmployee] = useState<EmployeeInfo | null>(null);
@@ -84,8 +84,14 @@ export default function EmployeeDashboard() {
     setDownloading(id);
     setTimeout(() => {
       setDownloading(null);
-      alert(`Download complete for Payslip: ${id}`);
-    }, 1500);
+      if (employee && employee.empno) {
+        router.push(`/payslip?empno=${employee.empno}`);
+      } else if (user && user.username) {
+        router.push(`/payslip?empno=${user.username}`);
+      } else {
+        router.push('/payslip');
+      }
+    }, 500); // reduced timeout to feel snappier
   };
 
   if (loading) {
@@ -96,28 +102,8 @@ export default function EmployeeDashboard() {
     );
   }
 
-  // Calculate some dummy payslip values based on employee basic pay (or fallback)
+  // Basic Pay value
   const basicPay = employee?.basic || 3000;
-  const mockPayslips = [
-    {
-      id: 'PS-2026-06',
-      date: 'June 30, 2026',
-      period: 'June 01 - June 30',
-      amount: (basicPay * 1.5).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-    },
-    {
-      id: 'PS-2026-05',
-      date: 'May 31, 2026',
-      period: 'May 01 - May 31',
-      amount: (basicPay * 1.5).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-    },
-    {
-      id: 'PS-2026-04',
-      date: 'April 30, 2026',
-      period: 'April 01 - April 30',
-      amount: (basicPay * 1.48).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-    }
-  ];
 
   const initials = user?.full_name ? user.full_name.substring(0, 2).toUpperCase() : user?.username.substring(0, 2).toUpperCase() || 'EMP';
   const displayName = employee?.empnm || user?.full_name || user?.username || 'Employee';
@@ -134,6 +120,7 @@ export default function EmployeeDashboard() {
           <div className="welcome-text">
             <h1>Welcome, {displayName}</h1>
             <p>Employee Portal &bull; {designation}</p>
+            <p style={{ fontSize: '0.85rem', color: '#38bdf8', marginTop: '4px', fontWeight: '500' }}>Program Owner: Nagesh D.M</p>
           </div>
         </div>
         <button onClick={handleSignOut} className="signout-btn">
@@ -149,15 +136,21 @@ export default function EmployeeDashboard() {
       <div className="dashboard-tabs" style={{ display: 'flex', gap: '20px', padding: '0 40px', marginBottom: '20px', borderBottom: '1px solid #e2e8f0' }}>
         <button 
           onClick={() => setActiveTab('profile')}
-          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'profile' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'profile' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'profile' ? '3px solid #38bdf8' : '3px solid transparent', color: activeTab === 'profile' ? '#ffffff' : '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', transition: 'color 0.2s' }}
         >
           My Profile
         </button>
         <button 
           onClick={() => setActiveTab('search')}
-          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'search' ? '3px solid #2563eb' : '3px solid transparent', color: activeTab === 'search' ? '#1e293b' : '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'search' ? '3px solid #38bdf8' : '3px solid transparent', color: activeTab === 'search' ? '#ffffff' : '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', transition: 'color 0.2s' }}
         >
           Organization Search
+        </button>
+        <button 
+          onClick={() => setActiveTab('payslip')}
+          style={{ padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === 'payslip' ? '3px solid #38bdf8' : '3px solid transparent', color: activeTab === 'payslip' ? '#ffffff' : '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', transition: 'color 0.2s' }}
+        >
+          Payslip
         </button>
       </div>
 
@@ -211,62 +204,15 @@ export default function EmployeeDashboard() {
             </svg>
             Basic Pay
           </div>
-          <div className="stat-value">{basicPay}</div>
+          <div className="stat-value">₹{basicPay.toLocaleString('en-IN')}</div>
           <div className="stat-sub">Scale: {employee?.payscl || 'Standard'}</div>
         </div>
       </section>
 
       {/* Main Grid */}
       <div className="content-grid">
-        {/* Left Side: Payslips & History */}
-        <main className="main-section">
-          <div className="dashboard-card">
-            <div className="card-title-bar">
-              <h2>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                  <polyline points="10 9 9 9 8 9" />
-                </svg>
-                Recent Payslips
-              </h2>
-            </div>
-
-            <div className="payslip-list">
-              {mockPayslips.map((ps) => (
-                <div key={ps.id} className="payslip-item">
-                  <div className="payslip-info">
-                    <span className="payslip-date">{ps.date}</span>
-                    <span className="payslip-period">Period: {ps.period}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                    <span className="payslip-amount">{ps.amount}</span>
-                    <button 
-                      onClick={() => handleDownload(ps.id)} 
-                      className="download-btn"
-                      disabled={downloading !== null}
-                    >
-                      {downloading === ps.id ? (
-                        '...'
-                      ) : (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
-
-        {/* Right Side: Biodata Summary */}
-        <aside className="sidebar-section">
+        {/* Top Section: Biodata Summary */}
+        <section className="biodata-section">
           <div className="dashboard-card">
             <div className="card-title-bar">
               <h2>
@@ -308,19 +254,45 @@ export default function EmployeeDashboard() {
                   <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>{employee?.email || ''}</span>
                 </span>
               </div>
-              <div className="biodata-item" style={{ borderLeftColor: '#10b981' }}>
+              <div className="biodata-item" style={{ borderBottomColor: '#10b981' }}>
                 <span className="biodata-label">Status</span>
                 <span className="status-badge">Active Employee</span>
               </div>
             </div>
           </div>
-        </aside>
+        </section>
       </div>
         </>
-      ) : (
+      ) : activeTab === 'search' ? (
         <div style={{ padding: '0 40px', height: 'calc(100vh - 180px)', marginBottom: '40px' }}>
           <div style={{ background: '#0f172a', borderRadius: '16px', height: '100%', overflow: 'hidden', padding: '20px', position: 'relative' }}>
             <EmployeePortal />
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: '0 40px', height: 'calc(100vh - 180px)', marginBottom: '40px' }}>
+          <div style={{ background: '#0f172a', borderRadius: '16px', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 20px auto' }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '10px' }}>Generate Your Payslip</h2>
+              <p style={{ color: '#94a3b8', marginBottom: '30px' }}>
+                Access the Payslip Generator to view, download, or print your latest salary slip.
+              </p>
+              <button 
+                onClick={() => handleDownload('current')} 
+                disabled={downloading !== null}
+                className="submit-btn" 
+                style={{ width: '100%', padding: '12px', fontSize: '1.1rem', background: 'linear-gradient(90deg, #38bdf8, #3b82f6)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+              >
+                {downloading ? 'Loading...' : 'Open Payslip Generator'}
+              </button>
+            </div>
           </div>
         </div>
       )}

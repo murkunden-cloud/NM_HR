@@ -1,17 +1,25 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Fragment } from "react";
 import * as XLSX from "xlsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MASTER DATA  (never mutated)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CASTES = ["SC","ST","VJ-A","NT-B","NT-C","NT-D","SBC","OBC","SEBC","EWS","OPEN","TOTAL"];
+const CASTES = ["SC","ST","VJ-A","NT-B","NT-C","NT-D","SBC","OBC","SEBC","EWS","OPEN","TOTAL","SURPLUS"];
 
 // Helper to parse Excel sheets
 function extractSheetData(arrayBuffer, sheetName) {
   const wb = XLSX.read(arrayBuffer, { type: "array" });
   const ws = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  const header = rows[0] || [];
+  
+  const colIndices = {};
+  CASTES.forEach(caste => {
+    const idx = header.findIndex(h => typeof h === 'string' && h.trim().toUpperCase() === caste.toUpperCase());
+    colIndices[caste] = idx;
+  });
+
   const data = [];
   
   for (let i = 1; i < rows.length; i++) {
@@ -22,8 +30,12 @@ function extractSheetData(arrayBuffer, sheetName) {
     obj.division = row[1] || undefined;
     obj.designation = row[2];
     obj.sanctionType = row[3];
-    CASTES.forEach((caste, idx) => {
-      obj[caste] = Number(row[4 + idx] || 0);
+    CASTES.forEach(caste => {
+      if (colIndices[caste] >= 0) {
+        obj[caste] = Number(row[colIndices[caste]] || 0);
+      } else {
+        obj[caste] = 0;
+      }
     });
     data.push(obj);
   }
@@ -33,40 +45,79 @@ function extractSheetData(arrayBuffer, sheetName) {
 
 function parseRows(buf, sheet) {
   const wb2 = XLSX.read(buf, { type: "array" });
-  if (!wb2.Sheets[sheet]) return { regular: [], surplus: [] };
+  if (!wb2.Sheets[sheet]) return { regular: [], surplus: [], pureSurplus: [] };
   const ws2 = wb2.Sheets[sheet];
   const rows2 = XLSX.utils.sheet_to_json(ws2, { header: 1 });
   const header = rows2[0] || [];
-  const remarkIdx = header.findIndex(h => String(h||'').toLowerCase().includes('remark'));
-  const regular = [], surplus = [];
-  let lastRegular = null; // track adjacency for adjustedAgainst
+
+  // Detect column indices
+  const remarkIdx  = header.findIndex(h => String(h||'').toLowerCase().includes('remark'));
+  
+  const colIndices = {};
+  CASTES.forEach(caste => {
+    const idx = header.findIndex(h => typeof h === 'string' && h.trim().toUpperCase() === caste.toUpperCase());
+    colIndices[caste] = idx;
+  });
+
+  const regular = [], surplus = [], pureSurplus = [];
+  let lastRegular = null; // adjacency tracking
+
   for (let i = 1; i < rows2.length; i++) {
     const row = rows2[i];
     if (!row || !row[2]) continue;
+
+    // Check Remarks column for row-level surplus
     const remarkVal = remarkIdx >= 0 ? String(row[remarkIdx] || '').toLowerCase() : '';
+
+    // Detect if this row is any kind of surplus
     const isSurplus = remarkVal.includes('surp') || remarkVal.includes('supl');
+    
+    // Pure surplus row flag (if any exist)
+    const isPure = remarkVal.includes('pure');
+
     const obj = {};
-    obj.circle = row[0]; obj.division = row[1] || undefined;
-    obj.designation = row[2];
-    obj.sanctionType = row[3] || (isSurplus ? 'Surplus (Adjusted)' : undefined);
-    CASTES.forEach((c, idx) => { obj[c] = Number(row[4 + idx] || 0); });
+    obj.circle       = row[0];
+    obj.division     = row[1] || undefined;
+    obj.designation  = row[2];
+    obj.sanctionType = row[3] || (isSurplus ? 'Surplus' : undefined);
+    
+    const nonTotalCastes = CASTES.filter(c => c !== 'TOTAL');
+    nonTotalCastes.forEach(c => {
+      if (colIndices[c] >= 0) {
+        obj[c] = Number(row[colIndices[c]] || 0);
+      } else {
+        obj[c] = 0;
+      }
+    });
+    obj.TOTAL = nonTotalCastes.reduce((a, c) => a + (obj[c] || 0), 0);
+
     if (isSurplus) {
       obj.isSurplus = true;
-      if (lastRegular) {
+      if (isPure) {
+        // Pure surplus — identified by "pure" keyword in Surplus column
+        // Not linked to any backlog designation, works against total strength only
+        obj.isPureSurplus = true;
+        pureSurplus.push(obj);
+      } else if (lastRegular) {
+        // Adjusted surplus — linked to the regular DR row just above
         obj.adjustedAgainst = {
           designation:  lastRegular.designation,
           sanctionType: lastRegular.sanctionType,
           circle:       lastRegular.circle,
           division:     lastRegular.division
         };
+        surplus.push(obj);
+      } else {
+        // Fallback: surplus with no regular row above → also pure
+        obj.isPureSurplus = true;
+        pureSurplus.push(obj);
       }
-      surplus.push(obj);
     } else {
       lastRegular = obj;
       regular.push(obj);
     }
   }
-  return { regular, surplus };
+  return { regular, surplus, pureSurplus };
 }
 
 
@@ -92,7 +143,17 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 // ─────────────────────────────────────────────────────────────────────────────
 
 function normalize(s){ return (s||"").toString().trim().replace(/\s+/g," "); }
-function rowKey(r){ return `${normalize(r.circle)}||${normalize(r.division)}||${normalize(r.designation)}||${normalize(r.sanctionType)}`; }
+function normalizeDiv(d) {
+  let v = normalize(d);
+  if (v.toLowerCase() === "pune mulshi division") return "Mulshi Division";
+  return v;
+}
+function normalizeType(t) {
+  let v = normalize(t);
+  if (v.toLowerCase().includes("by promotion 10%")) return v.replace(/10%/g, "100%");
+  return v;
+}
+function rowKey(r){ return `${normalize(r.circle)}||${normalizeDiv(r.division)}||${normalize(r.designation)}||${normalizeType(r.sanctionType)}`; }
 function vacant(s,f){ const v={...s}; CASTES.forEach(c=>{ v[c]=(s[c]||0)-(f[c]||0); }); return v; }
 
 function buildMaps(sanctionArr, filledArr){
@@ -148,7 +209,7 @@ function borderThin(){
   return{top:b,bottom:b,left:b,right:b};
 }
 
-function buildSheet(rows, classNum, month, year){
+function buildSheet(rows, classNum, month, year, pureSurplusRows = []){
   // rows: [{circle, division?, designation, sanctionType, sanction:{}, filled:{}, vacant:{}}]
   const isIV = classNum===4;
   const ws={};
@@ -172,8 +233,20 @@ function buildSheet(rows, classNum, month, year){
   R++;
 
   // Data
-  const TYPE_FILLS = {SANCTION:LBLUE, FILLED:LGREEN, VACANT:LRED};
-  const TYPE_HDRS  = {SANCTION:{fgColor:{rgb:"1E40AF"}}, FILLED:{fgColor:{rgb:"15803D"}}, VACANT:{fgColor:{rgb:"B91C1C"}}};
+  const TYPE_FILLS = {
+    SANCTION: LBLUE, 
+    REGULAR: {fgColor:{rgb:"F1F5F9"}}, 
+    SURPLUS: {fgColor:{rgb:"FFF7ED"}}, 
+    WORKING_FILLED: LGREEN, 
+    VACANT: LRED
+  };
+  const TYPE_HDRS  = {
+    SANCTION: {fgColor:{rgb:"1E40AF"}}, 
+    REGULAR: {fgColor:{rgb:"475569"}}, 
+    SURPLUS: {fgColor:{rgb:"EA580C"}}, 
+    WORKING_FILLED: {fgColor:{rgb:"15803D"}}, 
+    VACANT: {fgColor:{rgb:"B91C1C"}}
+  };
 
   // Group rows by designation for subtotals
   const byDesig = {};
@@ -185,9 +258,36 @@ function buildSheet(rows, classNum, month, year){
     R++;
 
     dRows.forEach((row,ri)=>{
-      ["sanction","filled","vacant"].forEach((t,ti)=>{
-        const d=row[t];
-        const rowFill = ti===0?(ri%2===0?null:{fgColor:{rgb:"F8FAFC"}}):TYPE_FILLS[t.toUpperCase()];
+      const workingFilled = { ...row.filled };
+      const regularPost = {};
+      const surplusPost = {};
+      
+      CASTES.forEach(c => {
+        if (c === 'SURPLUS') {
+          surplusPost[c] = (row.filledBase.SURPLUS || 0) + (row.surplusRows?.reduce((a, sr) => a + (sr.SURPLUS || 0), 0) || 0);
+          regularPost[c] = 0;
+        } else if (c !== 'TOTAL') {
+          const explicitSurplus = row.surplusRows?.reduce((a, sr) => a + (sr[c] || 0), 0) || 0;
+          surplusPost[c] = explicitSurplus;
+          regularPost[c] = (workingFilled[c] || 0) - explicitSurplus;
+        }
+      });
+      
+      regularPost.TOTAL = CASTES.filter(c => c !== 'TOTAL' && c !== 'SURPLUS').reduce((a, c) => a + (regularPost[c] || 0), 0);
+      surplusPost.TOTAL = CASTES.filter(c => c !== 'TOTAL').reduce((a, c) => a + (surplusPost[c] || 0), 0);
+      workingFilled.TOTAL = regularPost.TOTAL + surplusPost.TOTAL;
+
+      const rowTypes = [
+        { key: "sanction", label: "SANCTIONED", data: row.sanction, typeKey: "SANCTION" },
+        { key: "filledBase", label: "REGULAR POST", data: regularPost, typeKey: "REGULAR" },
+        { key: "surplus", label: "SURPLUS POST", data: surplusPost, typeKey: "SURPLUS" },
+        { key: "filled", label: "WORKING FILLED", data: workingFilled, typeKey: "WORKING_FILLED" },
+        { key: "vacant", label: "VACANT", data: row.vacant, typeKey: "VACANT" }
+      ];
+
+      rowTypes.forEach((rt, ti)=>{
+        const d = rt.data;
+        const rowFill = ti===0?(ri%2===0?null:{fgColor:{rgb:"F8FAFC"}}):TYPE_FILLS[rt.typeKey];
         let c=0;
         ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.circle,rowFill,ti===0,"1D4ED8");
         if(isIV) ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.division||"",rowFill);
@@ -195,19 +295,52 @@ function buildSheet(rows, classNum, month, year){
           ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.designation,rowFill,true);
           ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(row.sanctionType,rowFill);
         } else { c+=2; }
-        ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr(["SANCTIONED","FILLED","VACANT"][ti], TYPE_HDRS[t.toUpperCase()]);
+        ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr(rt.label, TYPE_HDRS[rt.typeKey]);
         CASTES.forEach(caste=>{
-          ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(d[caste]||0, rowFill, caste==="TOTAL", t==="vacant");
+          ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(d[caste]||0, rowFill, caste==="TOTAL", rt.key==="vacant");
         });
         R++;
       });
     });
 
     // Subtotal for this designation
-    const stS={}, stF={}, stV={};
-    CASTES.forEach(c=>{stS[c]=0;stF[c]=0;stV[c]=0;});
-    dRows.forEach(row=>{ CASTES.forEach(c=>{ stS[c]+=(row.sanction[c]||0); stF[c]+=(row.filled[c]||0); stV[c]+=(row.vacant[c]||0); }); });
-    [["TOTAL SANCTIONED",stS,TYPE_HDRS.SANCTION,LBLUE],["TOTAL FILLED",stF,TYPE_HDRS.FILLED,LGREEN],["TOTAL VACANT",stV,TYPE_HDRS.VACANT,LRED]].forEach(([lbl,data,fill,bg])=>{
+    const stS={}, stReg={}, stSurp={}, stF={}, stV={};
+    CASTES.forEach(c=>{stS[c]=0;stReg[c]=0;stSurp[c]=0;stF[c]=0;stV[c]=0;});
+    
+    dRows.forEach(row=>{ 
+      const workingFilled = { ...row.filled };
+      const regularPost = {};
+      const surplusPost = {};
+      CASTES.forEach(c => {
+        if (c === 'SURPLUS') {
+          surplusPost[c] = (row.filledBase.SURPLUS || 0) + (row.surplusRows?.reduce((a, sr) => a + (sr.SURPLUS || 0), 0) || 0);
+          regularPost[c] = 0;
+        } else if (c !== 'TOTAL') {
+          const explicitSurplus = row.surplusRows?.reduce((a, sr) => a + (sr[c] || 0), 0) || 0;
+          surplusPost[c] = explicitSurplus;
+          regularPost[c] = (workingFilled[c] || 0) - explicitSurplus;
+        }
+      });
+      regularPost.TOTAL = CASTES.filter(c => c !== 'TOTAL' && c !== 'SURPLUS').reduce((a, c) => a + (regularPost[c] || 0), 0);
+      surplusPost.TOTAL = CASTES.filter(c => c !== 'TOTAL').reduce((a, c) => a + (surplusPost[c] || 0), 0);
+      workingFilled.TOTAL = regularPost.TOTAL + surplusPost.TOTAL;
+
+      CASTES.forEach(c=>{ 
+        stS[c]+=(row.sanction[c]||0); 
+        stReg[c]+=(regularPost[c]||0);
+        stSurp[c]+=(surplusPost[c]||0);
+        stF[c]+=(workingFilled[c]||0); 
+        stV[c]+=(row.vacant[c]||0); 
+      }); 
+    });
+
+    [
+      ["TOTAL SANCTIONED", stS, TYPE_HDRS.SANCTION, LBLUE],
+      ["TOTAL REGULAR", stReg, TYPE_HDRS.REGULAR, TYPE_FILLS.REGULAR],
+      ["TOTAL SURPLUS", stSurp, TYPE_HDRS.SURPLUS, TYPE_FILLS.SURPLUS],
+      ["TOTAL WORKING FILLED", stF, TYPE_HDRS.WORKING_FILLED, LGREEN],
+      ["TOTAL VACANT", stV, TYPE_HDRS.VACANT, LRED]
+    ].forEach(([lbl,data,fill,bg])=>{
       let c=0;
       ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr(lbl,fill);
       if(isIV) ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr("",fill);
@@ -219,6 +352,25 @@ function buildSheet(rows, classNum, month, year){
     });
     R++; // blank row between designations
   });
+
+  if (pureSurplusRows && pureSurplusRows.length > 0) {
+    ws[XLSX.utils.encode_cell({r:R,c:0})] = {v:`PURE SURPLUS PERSONNEL (Not against Sanction)`,t:"s",s:{font:{bold:true,name:"Arial",sz:10,color:{rgb:"FFFFFF"}},fill:{patternType:"solid",fgColor:{rgb:"D97706"}},alignment:{horizontal:"left",vertical:"center"}}};
+    R++;
+    pureSurplusRows.forEach((sr, ri) => {
+      let c=0;
+      const rowFill = ri%2===0?null:{fgColor:{rgb:"FFFBEB"}};
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(sr.circle,rowFill,false,"1D4ED8");
+      if(isIV) ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(sr.division||"-",rowFill);
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell(sr.designation,rowFill,true);
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = cell("-",rowFill);
+      ws[XLSX.utils.encode_cell({r:R,c:c++})] = hdr("SURPLUS", {fgColor:{rgb:"D97706"}});
+      CASTES.forEach(caste=>{
+        ws[XLSX.utils.encode_cell({r:R,c:c++})] = numCell(sr[caste]||0, rowFill, caste==="TOTAL");
+      });
+      R++;
+    });
+    R++;
+  }
 
   // Col widths
   const colW = isIV
@@ -236,10 +388,10 @@ function buildSheet(rows, classNum, month, year){
   return ws;
 }
 
-function exportExcel(rows3, rows4, month, year, filename){
+function exportExcel(rows3, rows4, ps3, ps4, month, year, filename){
   const wb = XLSX.utils.book_new();
-  if(rows3.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows3,3,month,year), "Class III");
-  if(rows4.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows4,4,month,year), "Class IV");
+  if(rows3.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows3,3,month,year,ps3), "Class III");
+  if(rows4.length) XLSX.utils.book_append_sheet(wb, buildSheet(rows4,4,month,year,ps4), "Class IV");
   XLSX.writeFile(wb, filename || `MSEDCL_Backlog_${month}_${year}.xlsx`);
 }
 
@@ -247,18 +399,49 @@ function exportExcel(rows3, rows4, month, year, filename){
 // ROOT APP
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function RosterView(){
+export default function RosterView({ currentUser }){
   const now = new Date();
   const [tab, setTab] = useState("dashboard");
   const [cls, setCls] = useState("III");
-  const [selCircles, setSelCircles] = useState([...CIRCLES]);
-  const [selDivs, setSelDivs] = useState({RPUC:[...DIVS.RPUC],GKUC:[...DIVS.GKUC],PRC:[...DIVS.PRC]});
+
+  const getCircleShortCode = (c) => {
+    if(!c) return null;
+    const lowerC = c.toLowerCase();
+    const match = Object.entries(CIRCLE_FULL).find(([k,v]) => lowerC.includes(v.toLowerCase()) || lowerC.includes(k.toLowerCase()));
+    return match ? match[0] : null;
+  };
+
+  const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
+  
+  let inferredCircle = currentUser?.circl ? getCircleShortCode(currentUser.circl) : null;
+  const userDivision = currentUser?.divnm || null;
+  if (!inferredCircle && userDivision) {
+    for (const [c, divs] of Object.entries(DIVS)) {
+      if (divs.some(d => d.toLowerCase() === userDivision.toLowerCase())) {
+        inferredCircle = c;
+        break;
+      }
+    }
+  }
+  const userCircle = inferredCircle;
+  const initCircles = isSuperAdmin ? [...CIRCLES] : (userCircle ? [userCircle] : []);
+  
+  let initDivs = {RPUC:[...DIVS.RPUC],GKUC:[...DIVS.GKUC],PRC:[...DIVS.PRC]};
+  if (!isSuperAdmin && userDivision && inferredCircle) {
+    initDivs = {RPUC:[], GKUC:[], PRC:[]};
+    initDivs[inferredCircle] = [userDivision];
+  }
+
+  const [selCircles, setSelCircles] = useState(initCircles);
+  const [selDivs, setSelDivs] = useState(initDivs);
   const [sanctionIII, setSanctionIII] = useState([]);
   const [sanctionIV, setSanctionIV] = useState([]);
   const [filledIII, setFilledIII] = useState([]);
   const [filledIV, setFilledIV] = useState([]);
   const [surplusIII, setSurplusIII] = useState([]);
+  const [pureSurplusIII, setPureSurplusIII] = useState([]);
   const [surplusIV, setSurplusIV] = useState([]);
+  const [pureSurplusIV, setPureSurplusIV] = useState([]);
   const [loading, setLoading] = useState(true);
   // surplusEdits: key = circle||division||surplusDesig => {SC,ST,...} overrides
   const [surplusEdits, setSurplusEdits] = useState(() => {
@@ -287,17 +470,36 @@ export default function RosterView(){
   const [lastSaved, setLastSaved] = useState(() => localStorage.getItem("msedcl_lastSaved") || "");
   const [refreshing, setRefreshing] = useState(false);
   const [autoUpdateStatus, setAutoUpdateStatus] = useState({ monitoring: false, lastCheck: null, modificationsDetected: false });
+  const [generatingBacklog, setGeneratingBacklog] = useState(false);
+  const [generatingQuarterly, setGeneratingQuarterly] = useState(false);
+  const [reportCircle, setReportCircle] = useState((isSuperAdmin || !userCircle) ? "All" : userCircle);
 
   const allDesigs = cls==="III" ? [...new Set(sanctionIII.map(r=>r.designation))] : [...new Set(sanctionIV.map(r=>r.designation))];
 
   // switch class — reset desigs
   const switchCls = v => { setCls(v); setSelDesigs(v==="III"?[...new Set(sanctionIII.map(r=>r.designation))]:[...new Set(sanctionIV.map(r=>r.designation))]); };
 
-  const toggleCircle = c => setSelCircles(p=>p.includes(c)?p.filter(x=>x!==c):[...p,c]);
-  const toggleDiv = (circ,div) => setSelDivs(p=>({...p,[circ]:p[circ].map(normalize).includes(normalize(div))?p[circ].filter(d=>normalize(d)!==normalize(div)):[...p[circ],div]}));
+  const toggleCircle = c => {
+    if (!isSuperAdmin && c !== userCircle) return;
+    setSelCircles(p=>p.includes(c)?p.filter(x=>x!==c):[...p,c]);
+  };
+  const toggleDiv = (circ,div) => {
+    if (!isSuperAdmin && userDivision && normalize(div) !== normalize(userDivision)) return;
+    setSelDivs(p=>({...p,[circ]:p[circ].map(normalize).includes(normalize(div))?p[circ].filter(d=>normalize(d)!==normalize(div)):[...p[circ],div]}));
+  };
   const toggleDesig = d => setSelDesigs(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d]);
 
   // File handlers
+  const downloadRosterTemplate = (type) => {
+    const headers = [["Circle", "Division", "Designation", "Sanction Type", "SC", "ST", "VJ-A", "NT-B", "NT-C", "NT-D", "SBC", "OBC", "SEBC", "EWS", "OPEN", "TOTAL", ...(type === 'filled' ? ["Remark"] : [])]];
+    const wb = XLSX.utils.book_new();
+    const ws3 = XLSX.utils.aoa_to_sheet(headers);
+    const ws4 = XLSX.utils.aoa_to_sheet(headers);
+    XLSX.utils.book_append_sheet(wb, ws3, "III");
+    XLSX.utils.book_append_sheet(wb, ws4, "IV");
+    XLSX.writeFile(wb, `${type === 'sanction' ? 'Sanction' : 'Filled'}_Template.xlsx`);
+  };
+
   const handleSanctionFile = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -323,10 +525,10 @@ export default function RosterView(){
     const file = e.target.files[0];
     if (file) {
       const buffer = await file.arrayBuffer();
-      const { regular: fIII, surplus: sIII2 } = parseRows(buffer, "III");
-      const { regular: fIV,  surplus: sIV2  } = parseRows(buffer, "IV");
-      setFilledIII(fIII); setSurplusIII(sIII2);
-      setFilledIV(fIV);   setSurplusIV(sIV2);
+      const { regular: fIII, surplus: sIII2, pureSurplus: psIII } = parseRows(buffer, "III");
+      const { regular: fIV,  surplus: sIV2, pureSurplus: psIV  } = parseRows(buffer, "IV");
+      setFilledIII(fIII); setSurplusIII(sIII2); setPureSurplusIII(psIII);
+      setFilledIV(fIV);   setSurplusIV(sIV2);   setPureSurplusIV(psIV);
       setFilledEdits({});
       
       const formData = new FormData();
@@ -412,8 +614,15 @@ export default function RosterView(){
     let s=0,f=0,v=0; const cv={};
     CASTES.forEach(c=>cv[c]=0);
     activeRows.forEach(r=>{s+=r.sanction.TOTAL||0;f+=r.filled.TOTAL||0;v+=r.vacant.TOTAL||0;CASTES.forEach(c=>{cv[c]+=(r.vacant[c]||0);});});
-    return{s,f,v,cv};
-  },[activeRows]);
+    
+    const pureSurpArr = cls==="III" ? pureSurplusIII : pureSurplusIV;
+    let ps = 0;
+    pureSurpArr.forEach(r => { ps += (r.TOTAL || 0); });
+    
+    return{s,f,v,cv,ps};
+  },[activeRows, cls, pureSurplusIII, pureSurplusIV]);
+
+  const activePureSurplus = cls==="III" ? pureSurplusIII : pureSurplusIV;
 
   const grouped = useMemo(()=>{
     const g={};
@@ -469,7 +678,70 @@ export default function RosterView(){
   // Export
   const handleExport = () => {
     const r3 = buildRows("III"); const r4 = buildRows("IV");
-    exportExcel(r3,r4,month,year);
+    exportExcel(r3,r4,pureSurplusIII,pureSurplusIV,month,year);
+  };
+
+  // Generate Backlog Proforma_A report
+  const handleGenerateBacklog = async () => {
+    setGeneratingBacklog(true);
+    setSaveMsg("⏳ Generating Backlog Proforma_A report...");
+    
+    try {
+      const response = await fetch("/api/roster/backlog-report", {
+        method: "GET"
+      });
+      
+      if (response.ok) {
+        setSaveMsg("✅ Report generated! Downloading...");
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "Backlog_Proforma_A.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        setTimeout(() => setSaveMsg(""), 3000);
+      } else {
+        const errorMsg = await response.text();
+        setSaveMsg(`❌ Failed: ${errorMsg}`);
+        setTimeout(() => setSaveMsg(""), 4000);
+      }
+    } catch (error) {
+      setSaveMsg("❌ Error generating report");
+      setTimeout(() => setSaveMsg(""), 4000);
+    } finally {
+      setGeneratingBacklog(false);
+    }
+  };
+
+  // Generate Quarterly Backlog report
+  const handleGenerateQuarterly = async (proforma) => {
+    setGeneratingQuarterly(proforma);
+    setSaveMsg(`⏳ Generating Quarterly Proforma ${proforma}...`);
+    try {
+      const response = await fetch(`/api/roster/quarterly-backlog?proforma=${proforma}&circle=${reportCircle}`, {
+        method: "GET",
+      });
+      if (!response.ok) throw new Error("Failed to generate quarterly backlog report");
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Quarterly_Backlog_Proforma_${proforma}_${reportCircle}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSaveMsg(`✅ Quarterly Proforma ${proforma} downloaded!`);
+    } catch (error) {
+      console.error(error);
+      setSaveMsg(`❌ Error downloading Proforma ${proforma}`);
+    } finally {
+      setGeneratingQuarterly(false);
+    }
   };
 
   // Apply surplus edit
@@ -604,14 +876,20 @@ export default function RosterView(){
             </div>
             {/* File Uploads */}
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
-              <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(37,99,235,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff"}}>
-                📄 Upload Sanction.xlsx
-                <input type="file" accept=".xlsx,.xls" onChange={handleSanctionFile} style={{display:"none"}}/>
-              </label>
-              <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(22,163,74,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff"}}>
-                📄 Upload Filled.xlsx
-                <input type="file" accept=".xlsx,.xls" onChange={handleFilledFile} style={{display:"none"}}/>
-              </label>
+              <div style={{display:"flex", gap: 4}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(37,99,235,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff", flex: 1}}>
+                  📄 Upload Sanction.xlsx
+                  <input type="file" accept=".xlsx,.xls" onChange={handleSanctionFile} style={{display:"none"}}/>
+                </label>
+                <button onClick={() => downloadRosterTemplate('sanction')} style={{background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:6, padding:"0 8px", color:"#fff", fontSize:10, cursor:"pointer"}}>Template</button>
+              </div>
+              <div style={{display:"flex", gap: 4}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"rgba(22,163,74,0.3)",borderRadius:6,cursor:"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff", flex: 1}}>
+                  📄 Upload Filled.xlsx
+                  <input type="file" accept=".xlsx,.xls" onChange={handleFilledFile} style={{display:"none"}}/>
+                </label>
+                <button onClick={() => downloadRosterTemplate('filled')} style={{background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:6, padding:"0 8px", color:"#fff", fontSize:10, cursor:"pointer"}}>Template</button>
+              </div>
               <button onClick={handleRefresh} disabled={refreshing} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:refreshing?"rgba(251,146,60,0.5)":"rgba(251,146,60,0.3)",borderRadius:6,cursor:refreshing?"not-allowed":"pointer",border:"1px solid rgba(255,255,255,0.2)",fontSize:11,color:"#fff",fontWeight:600}}>
                 {refreshing ? "🔄 Refreshing..." : "🔄 Refresh Data"}
               </button>
@@ -644,15 +922,12 @@ export default function RosterView(){
               )}
               {saveMsg && <span style={{fontSize:12,color:"#86efac",fontWeight:600}}>{saveMsg}</span>}
               {lastSaved && !saveMsg && <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",whiteSpace:"nowrap"}}>💾 {lastSaved}</span>}
-              <button onClick={handleExport} style={{padding:"7px 18px",background:"#16a34a",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(22,163,74,0.4)"}}>
-                📥 Export Excel
-              </button>
             </div>
           </div>
 
           {/* Tabs */}
           <div style={{display:"flex",gap:0,marginTop:12,alignItems:"flex-end"}}>
-            {[["dashboard","📊 Dashboard"],["table","📋 Roster Table"],["editor","✏️ Edit Data"]].map(([id,lbl])=>(
+            {[["dashboard","📊 Dashboard"],["table","📋 Roster Table"],["editor","✏️ Edit Data"],["reports","📈 Reports"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 24px",background:tab===id?"rgba(255,255,255,0.18)":"transparent",border:"none",borderBottom:tab===id?"3px solid #fff":"3px solid transparent",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:tab===id?800:500,transition:"all 0.2s",letterSpacing:0.3}}>
                 {lbl}
               </button>
@@ -664,12 +939,10 @@ export default function RosterView(){
       {/* AUTHOR BAR */}
       <div style={{background:"linear-gradient(90deg,#1e3a5f,#2563eb)",color:"#fff",padding:"6px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <span style={{background:"#f59e0b",color:"#1e1e1e",padding:"3px 12px",borderRadius:20,fontWeight:900,fontSize:13,letterSpacing:0.5}}>HEAD CLERK</span>
-          <span style={{fontWeight:800,fontSize:15,letterSpacing:0.3}}>Nagesh D.M.</span>
+          <span style={{background:"#f59e0b",color:"#1e1e1e",padding:"3px 12px",borderRadius:20,fontWeight:900,fontSize:13,letterSpacing:0.5}}>{currentUser?.role || "USER"}</span>
+          <span style={{fontWeight:800,fontSize:15,letterSpacing:0.3}}>{currentUser?.full_name || "Guest"}</span>
           <span style={{opacity:0.7,fontSize:12}}>|</span>
-          <span style={{fontSize:12,fontWeight:600}}>Office: <b>02266083</b></span>
-          <span style={{opacity:0.7,fontSize:12}}>|</span>
-          <span style={{fontSize:12,fontWeight:600}}>Mob: <b style={{color:"#fde68a",fontSize:13}}>7875388248</b></span>
+          <span style={{fontSize:12,fontWeight:600}}>CPF: <b>{currentUser?.username || "N/A"}</b></span>
         </div>
         <div style={{fontSize:11,opacity:0.6,fontStyle:"italic"}}>MSEDCL Pune Zone — Backlog Roster System</div>
       </div>
@@ -681,14 +954,52 @@ export default function RosterView(){
         <div style={{width:226,flexShrink:0}}>
           <Sidebar cls={cls} setCls={switchCls} selCircles={selCircles} toggleCircle={toggleCircle}
             selDivs={selDivs} toggleDiv={toggleDiv} allDesigs={allDesigs}
-            selDesigs={selDesigs} setSelDesigs={setSelDesigs} toggleDesig={toggleDesig} isIV={cls==="IV"}/>
+            selDesigs={selDesigs} setSelDesigs={setSelDesigs} toggleDesig={toggleDesig} isIV={cls==="IV"}
+            isSuperAdmin={isSuperAdmin} userCircle={userCircle} />
         </div>
 
         {/* Main */}
         <div style={{flex:1,minWidth:0}}>
-          {tab==="dashboard" && <Dashboard summary={summary} grouped={grouped} activeRows={activeRows} cls={cls}/>}
-          {tab==="table"     && <TableView grouped={grouped} cls={cls}/>}
+          {tab==="dashboard" && <Dashboard summary={summary} grouped={grouped} activeRows={activeRows} cls={cls} pureSurplus={activePureSurplus} />}
+          {tab==="table"     && <TableView grouped={grouped} cls={cls} pureSurplus={activePureSurplus} />}
           {tab==="editor" && <EditorView activeRows={activeRows} applyEdit={applyEdit} sanctionEdits={sanctionEdits} filledEdits={filledEdits} surplusEdits={surplusEdits} applySurplusEdit={applySurplusEdit} addManualSurplus={(row)=>addManualSurplus(cls,row)} removeManualSurplus={(srKey)=>removeManualSurplus(cls,srKey)} cls={cls} onSave={handleSave} pendingSaved={pendingSaved}/>}
+          {tab==="reports" && (
+            <div style={{padding:24, background:"#fff", borderRadius:12, boxShadow:"0 4px 12px rgba(0,0,0,0.05)"}}>
+              <h2 style={{marginTop:0, marginBottom:20, color:"#1e3a5f"}}>Generate Reports</h2>
+              
+              <div style={{display:"flex", alignItems: "center", gap: 16, marginBottom: 20}}>
+                <label style={{fontWeight: 600, color: "#475569"}}>Select Circle for Quarterly Report:</label>
+                <select 
+                  value={reportCircle} 
+                  onChange={e => setReportCircle(e.target.value)} 
+                  style={{padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1", outline: "none", cursor: "pointer"}}
+                >
+                  <option value="All">All Circles (Zone Total + Circle Sheets)</option>
+                  <option value="RPUC">RPUC</option>
+                  <option value="GKUC">GKUC</option>
+                  <option value="PRC">PRC</option>
+                </select>
+              </div>
+
+              <div style={{display:"flex", gap: 16, flexWrap:"wrap"}}>
+                <button onClick={handleExport} style={{padding:"10px 24px",background:"#16a34a",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(22,163,74,0.4)"}}>
+                  📥 Export Standard Excel
+                </button>
+                <button onClick={handleGenerateBacklog} disabled={generatingBacklog} style={{padding:"10px 24px",background:generatingBacklog?"rgba(139,92,246,0.5)":"#8b5cf6",border:"none",borderRadius:7,color:"#fff",cursor:generatingBacklog?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(139,92,246,0.4)"}}>
+                  {generatingBacklog ? "⏳ Generating..." : "📈 Backlog Proforma_A"}
+                </button>
+                <button onClick={() => handleGenerateQuarterly('A')} disabled={generatingQuarterly === 'A'} style={{padding:"10px 24px",background:generatingQuarterly === 'A'?"rgba(16, 185, 129, 0.5)":"#10b981",border:"none",borderRadius:7,color:"#fff",cursor:generatingQuarterly === 'A'?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(16, 185, 129, 0.4)", marginLeft: "10px"}}>
+                  {generatingQuarterly === 'A' ? "⏳ Generating..." : "📅 Quarterly (Proforma A)"}
+                </button>
+                <button onClick={() => handleGenerateQuarterly('B')} disabled={generatingQuarterly === 'B'} style={{padding:"10px 24px",background:generatingQuarterly === 'B'?"rgba(16, 185, 129, 0.5)":"#10b981",border:"none",borderRadius:7,color:"#fff",cursor:generatingQuarterly === 'B'?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(16, 185, 129, 0.4)", marginLeft: "10px"}}>
+                  {generatingQuarterly === 'B' ? "⏳ Generating..." : "📅 Quarterly (Proforma B)"}
+                </button>
+                <button onClick={() => handleGenerateQuarterly('C')} disabled={generatingQuarterly === 'C'} style={{padding:"10px 24px",background:generatingQuarterly === 'C'?"rgba(16, 185, 129, 0.5)":"#10b981",border:"none",borderRadius:7,color:"#fff",cursor:generatingQuarterly === 'C'?"not-allowed":"pointer",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(16, 185, 129, 0.4)", marginLeft: "10px"}}>
+                  {generatingQuarterly === 'C' ? "⏳ Generating..." : "📅 Quarterly (Proforma C)"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -701,8 +1012,12 @@ export default function RosterView(){
 // SIDEBAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs,selDesigs,setSelDesigs,toggleDesig,isIV}){
+function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs,selDesigs,setSelDesigs,toggleDesig,isIV,isSuperAdmin,userCircle,userDivision}){
   const [openC,setOpenC]=useState(null);
+  const lockCircle = !isSuperAdmin;
+  const normalize = s => (s||"").toLowerCase().trim();
+  const lockDiv = !isSuperAdmin && !!userDivision;
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <Card>
@@ -718,18 +1033,20 @@ function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs
         {CIRCLES.map(c=>(
           <div key={c}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-              <input type="checkbox" checked={selCircles.includes(c)} onChange={()=>toggleCircle(c)} style={{accentColor:"#2563eb",cursor:"pointer"}}/>
-              <span style={{fontSize:12,fontWeight:700,flex:1,cursor:"pointer",color:"#1e3a5f"}} onClick={()=>toggleCircle(c)}>{c}</span>
+              <input type="checkbox" checked={selCircles.includes(c)} onChange={()=>toggleCircle(c)} disabled={lockCircle && c !== userCircle} style={{accentColor:"#2563eb",cursor:lockCircle && c !== userCircle ? "not-allowed" : "pointer"}}/>
+              <span style={{fontSize:12,fontWeight:700,flex:1,cursor:lockCircle && c !== userCircle ? "not-allowed" : "pointer",color:(lockCircle && c !== userCircle) ? "#94a3b8" : "#1e3a5f"}} onClick={()=>{if(!lockCircle || c === userCircle) toggleCircle(c);}}>{c}</span>
               {isIV&&<button onClick={()=>setOpenC(openC===c?null:c)} style={{border:"none",background:"none",cursor:"pointer",fontSize:11,color:"#2563eb",padding:"0 2px"}}>{openC===c?"▲":"▼"}</button>}
             </div>
             {isIV&&openC===c&&(
               <div style={{paddingLeft:18,marginBottom:4}}>
-                {DIVS[c]?.map(div=>(
+                {DIVS[c]?.map(div=>{
+                  const isDisabledDiv = lockDiv && normalize(div) !== normalize(userDivision);
+                  return (
                   <div key={div} style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
-                    <input type="checkbox" checked={selDivs[c]?.includes(div)} onChange={()=>toggleDiv(c,div)} style={{accentColor:"#2563eb",cursor:"pointer"}}/>
-                    <span style={{fontSize:10,color:"#475569",cursor:"pointer",lineHeight:1.4}} onClick={()=>toggleDiv(c,div)}>{div.replace(" Division","")}</span>
+                    <input type="checkbox" checked={selDivs[c]?.includes(div)} onChange={()=>toggleDiv(c,div)} disabled={isDisabledDiv} style={{accentColor:"#2563eb",cursor:isDisabledDiv?"not-allowed":"pointer"}}/>
+                    <span style={{fontSize:10,color:isDisabledDiv?"#94a3b8":"#475569",cursor:isDisabledDiv?"not-allowed":"pointer",lineHeight:1.4}} onClick={()=>{if(!isDisabledDiv) toggleDiv(c,div)}}>{div.replace(" Division","")}</span>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -761,7 +1078,7 @@ function Sidebar({cls,setCls,selCircles,toggleCircle,selDivs,toggleDiv,allDesigs
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Dashboard({summary,grouped,activeRows,cls}){
+function Dashboard({summary,grouped,activeRows,cls,pureSurplus}){
   const CASTE_COLORS = {SC:"#ef4444",ST:"#f97316","VJ-A":"#eab308","NT-B":"#84cc16","NT-C":"#10b981","NT-D":"#06b6d4",SBC:"#8b5cf6",OBC:"#ec4899",SEBC:"#f43f5e",EWS:"#6366f1",OPEN:"#64748b",TOTAL:"#1e293b"};
 
   // Calculate circle-wise totals
@@ -809,9 +1126,9 @@ function Dashboard({summary,grouped,activeRows,cls}){
                 return (
                   <tr key={circ} style={{background:i%2===0?"#f8fafc":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                     <td style={{padding:"5px 10px",fontWeight:700,color:"#2563eb",fontSize:11,textAlign:"left"}}>{CIRCLE_FULL[circ] || circ}</td>
-                    <td style={{padding:"5px 10px",textAlign:"center",fontSize:11}}>{s}</td>
-                    <td style={{padding:"5px 10px",textAlign:"center",color:"#16a34a",fontWeight:700,fontSize:11}}>{f}</td>
-                    <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#dc2626":"#16a34a",fontWeight:700,fontSize:11}}>{v}</td>
+                    <td style={{padding:"5px 10px",textAlign:"center",fontSize:13,fontWeight:700,color:"#1e40af",background:"#eff6ff"}}>{s}</td>
+                    <td style={{padding:"5px 10px",textAlign:"center",color:"#15803d",background:"#f0fdf4",fontWeight:900,fontSize:14}}>{f}</td>
+                    <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#b91c1c":"#15803d",background:v>0?"#fef2f2":"#f0fdf4",fontWeight:900,fontSize:14}}>{v}</td>
                     <td style={{padding:"5px 10px",textAlign:"center"}}>
                       <span style={{padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700,background:p>=80?"#dcfce7":p>=60?"#fef3c7":"#fee2e2",color:p>=80?"#16a34a":p>=60?"#b45309":"#dc2626"}}>{p}%</span>
                     </td>
@@ -842,9 +1159,9 @@ function Dashboard({summary,grouped,activeRows,cls}){
                     <tr key={key} style={{background:i%2===0?"#f8fafc":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                       <td style={{padding:"5px 10px",fontWeight:700,color:"#2563eb",fontSize:11,textAlign:"left"}}>{CIRCLE_FULL[circle] || circle}</td>
                       <td style={{padding:"5px 10px",fontSize:11,textAlign:"left"}}>{division}</td>
-                      <td style={{padding:"5px 10px",textAlign:"center",fontSize:11}}>{s}</td>
-                      <td style={{padding:"5px 10px",textAlign:"center",color:"#16a34a",fontWeight:700,fontSize:11}}>{f}</td>
-                      <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#dc2626":"#16a34a",fontWeight:700,fontSize:11}}>{v}</td>
+                      <td style={{padding:"5px 10px",textAlign:"center",fontSize:13,fontWeight:700,color:"#1e40af",background:"#eff6ff"}}>{s}</td>
+                      <td style={{padding:"5px 10px",textAlign:"center",color:"#15803d",background:"#f0fdf4",fontWeight:900,fontSize:14}}>{f}</td>
+                      <td style={{padding:"5px 10px",textAlign:"center",color:v>0?"#b91c1c":"#15803d",background:v>0?"#fef2f2":"#f0fdf4",fontWeight:900,fontSize:14}}>{v}</td>
                       <td style={{padding:"5px 10px",textAlign:"center"}}>
                         <span style={{padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700,background:p>=80?"#dcfce7":p>=60?"#fef3c7":"#fee2e2",color:p>=80?"#16a34a":p>=60?"#b45309":"#dc2626"}}>{p}%</span>
                       </td>
@@ -876,8 +1193,8 @@ function Dashboard({summary,grouped,activeRows,cls}){
                 return (
                   <tr key={circ} style={{background:i%2===0?"#f8fafc":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                     <td style={{padding:"5px 10px",fontWeight:700,color:"#2563eb",fontSize:11,textAlign:"left"}}>{CIRCLE_FULL[circ]||circ}</td>
-                    {CASTES.filter(c=>c!=="TOTAL").map(c=>(<td key={c} style={{padding:"5px 10px",textAlign:"center",fontSize:11}}>{row[c]}</td>))}
-                    <td style={{padding:"5px 10px",textAlign:"center",fontWeight:800,fontSize:11}}>{rowTotal}</td>
+                    {CASTES.filter(c=>c!=="TOTAL").map(c=>(<td key={c} style={{padding:"5px 10px",textAlign:"center",fontSize:13,fontWeight:700,color:row[c]>0?"#b91c1c":"#334155",background:row[c]>0?"#fef2f2":"transparent"}}>{row[c]}</td>))}
+                    <td style={{padding:"5px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#b91c1c",background:"#fef2f2"}}>{rowTotal}</td>
                   </tr>
                 );
               })}
@@ -885,9 +1202,9 @@ function Dashboard({summary,grouped,activeRows,cls}){
                 <td style={{padding:"8px 10px",fontWeight:800,fontSize:11}}>Pune Zone Total</td>
                 {CASTES.filter(c=>c!=="TOTAL").map(c=>{
                   const v = activeRows.reduce((a,r)=>a+(r.vacant[c]||0),0);
-                  return (<td key={c} style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:11}}>{v}</td>);
+                  return (<td key={c} style={{padding:"8px 10px",textAlign:"center",fontWeight:900,fontSize:13,color:v>0?"#ffadad":"#fff"}}>{v}</td>);
                 })}
-                <td style={{padding:"8px 10px",textAlign:"center",fontWeight:900,fontSize:11}}>{CASTES.filter(c=>c!=="TOTAL").reduce((a,c)=>a+activeRows.reduce((s,r)=>s+(r.vacant[c]||0),0),0)}</td>
+                <td style={{padding:"8px 10px",textAlign:"center",fontWeight:900,fontSize:15,color:"#ffadad"}}>{CASTES.filter(c=>c!=="TOTAL").reduce((a,c)=>a+activeRows.reduce((s,r)=>s+(r.vacant[c]||0),0),0)}</td>
               </tr>
             </tbody>
           </table>
@@ -895,6 +1212,37 @@ function Dashboard({summary,grouped,activeRows,cls}){
       </Card>
 
       
+      {pureSurplus && pureSurplus.length > 0 && (
+        <Card style={{marginBottom:14, borderLeft:"4px solid #f59e0b", background:"linear-gradient(145deg, #1e293b, #0f172a)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <h3 style={{margin:0,color:"#fcd34d",fontSize:16,fontWeight:700}}>⚠️ Pure Surplus Personnel (Not against Sanction)</h3>
+            <span style={{background:"rgba(245,158,11,0.2)",color:"#fbbf24",padding:"4px 10px",borderRadius:20,fontWeight:700,fontSize:12}}>
+              Total: {pureSurplus.reduce((a,r)=>a+(r.TOTAL||0),0)} employees
+            </span>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,background:"#0f172a",borderRadius:6,overflow:"hidden"}}>
+              <thead>
+                <tr>
+                  {["Circle","Division","Designation","Status",...CASTES].map(h=><th key={h} style={{background:"#1e293b",color:"#94a3b8",padding:"8px",textAlign:"center",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {pureSurplus.map((sr,i)=>(
+                  <tr key={i} style={{borderBottom:"1px solid #1e293b"}}>
+                    <td style={{padding:"8px",textAlign:"center",color:"#e2e8f0"}}>{sr.circle}</td>
+                    <td style={{padding:"8px",textAlign:"center",color:"#e2e8f0"}}>{sr.division||"-"}</td>
+                    <td style={{padding:"8px",textAlign:"center",color:"#60a5fa",fontWeight:600}}>{sr.designation}</td>
+                    <td style={{padding:"8px",textAlign:"center",color:"#fbbf24",fontWeight:600}}>Surplus</td>
+                    {CASTES.map(c=><td key={c} style={{padding:"8px",textAlign:"center",color:sr[c]>0?"#fff":"#475569"}}>{sr[c]||"-"}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
     </div>
   );
 }
@@ -903,7 +1251,7 @@ function Dashboard({summary,grouped,activeRows,cls}){
 // TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TableView({grouped,cls}){
+function TableView({grouped,cls,pureSurplus}){
   const [mode,setMode]=useState("all");
   return(
     <div>
@@ -913,6 +1261,38 @@ function TableView({grouped,cls}){
           <button key={v} onClick={()=>setMode(v)} style={{padding:"6px 14px",border:"none",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:mode===v?700:400,background:mode===v?"#2563eb":"#e2e8f0",color:mode===v?"#fff":"#475569"}}>{l}</button>
         ))}
       </div>
+      {pureSurplus && pureSurplus.length > 0 && (mode==="all"||mode==="filled") && (
+        <Card style={{marginBottom:14, border:"1px solid #f59e0b", overflow:"hidden", padding: 0}}>
+          <div style={{background:"rgba(245,158,11,0.15)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid rgba(245,158,11,0.3)"}}>
+            <h4 style={{margin:0,color:"#fbbf24",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:16}}>⚠️</span> Pure Surplus Detail
+            </h4>
+            <span style={{background:"#f59e0b",color:"#000",padding:"4px 10px",borderRadius:20,fontWeight:700,fontSize:11}}>
+              {pureSurplus.reduce((a,r)=>a+(r.TOTAL||0),0)} employees
+            </span>
+          </div>
+          <div style={{overflowX:"auto", padding: "16px"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead>
+                <tr style={{background:"#1e3a5f",color:"#fff"}}>
+                  {["Circle","Division","Designation","Status",...CASTES].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700}}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {pureSurplus.map((sr,i)=>(
+                  <tr key={i} style={{background:i%2===0?"rgba(30,41,59,0.4)":"rgba(56,189,246,0.1)",borderBottom:"1px solid rgba(148,163,184,0.15)"}}>
+                    <td style={{padding:"8px 10px"}}>{sr.circle}</td>
+                    <td style={{padding:"8px 10px"}}>{sr.division||"-"}</td>
+                    <td style={{padding:"8px 10px",color:"#60a5fa"}}>{sr.designation}</td>
+                    <td style={{padding:"8px 10px",color:"#fbbf24",fontWeight:"bold"}}>Surplus</td>
+                    {CASTES.map(c=><td key={c} style={{padding:"8px 10px",textAlign:"center",color:sr[c]>0?"#fff":"#475569"}}>{sr[c]||"-"}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
       {Object.entries(grouped).map(([desig,rows])=>(
         <DesigTable key={desig} desig={desig} rows={rows} mode={mode} cls={cls}/>
       ))}
@@ -949,14 +1329,14 @@ function DesigTable({desig,rows,mode,cls}){
           </thead>
           <tbody>
             {rows.map((r,ri)=>(
-              <>
+              <Fragment key={r.key}>
                 {showSanction&&(
                   <tr key={`${r.key}|s`} style={{background:ri%2===0?"rgba(30,41,59,0.4)":"rgba(56,189,246,0.1)",borderBottom:"1px solid rgba(148,163,184,0.15)"}}>
                     <td style={{...TD,fontWeight:700,color:"#60a5fa"}}>{r.circle}</td>
                     {cls==="IV"&&<td style={{...TD,fontSize:10}}>{r.division}</td>}
                     <td style={{...TD,fontSize:10}}>{r.sanctionType}</td>
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.sanction,background:TBG.sanction,whiteSpace:"nowrap"}}>SANCTIONED</td>
-                    {CASTES.map(c=><td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400}}>{r.sanction[c]||0}</td>)}
+                    {CASTES.map(c=><td key={c} style={{...TD,textAlign:"center",fontSize:13,fontWeight:c==="TOTAL"?900:700,color:"#1e40af"}}>{r.sanction[c]||0}</td>)}
                   </tr>
                 )}
 
@@ -971,10 +1351,10 @@ function DesigTable({desig,rows,mode,cls}){
                       FILLED{r.hasSurplus&&<span style={{marginLeft:4,fontSize:9,color:"#f97316"}}>+SURPLUS</span>}
                     </td>
                     {CASTES.map(c=>(
-                      <td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:"#34d399"}}>
+                      <td key={c} style={{...TD,textAlign:"center",fontSize:14,fontWeight:c==="TOTAL"?900:700,color:"#15803d",background:c==="TOTAL"?"rgba(21,128,61,0.1)":"transparent"}}>
                         {r.filled[c]||0}
                         {c==="TOTAL"&&r.hasSurplus&&(
-                          <div style={{fontSize:8,color:"#f97316",fontWeight:600}}>({r.filledBase[c]||0}+{(r.filled[c]||0)-(r.filledBase[c]||0)})</div>
+                          <div style={{fontSize:10,color:"#c2410c",fontWeight:800}}>({r.filledBase[c]||0}+{(r.filled[c]||0)-(r.filledBase[c]||0)})</div>
                         )}
                       </td>
                     ))}
@@ -1009,11 +1389,11 @@ function DesigTable({desig,rows,mode,cls}){
                     <td style={{...TD,fontWeight:700,fontSize:10,color:TCOLOR.vacant,background:TBG.vacant,whiteSpace:"nowrap"}}>VACANT</td>
                     {CASTES.map(c=>{
                       const v=r.vacant[c]||0;
-                      return<td key={c} style={{...TD,textAlign:"center",fontWeight:c==="TOTAL"?700:400,color:v>0?"#f87171":v<0?"#a78bfa":"#cbd5e1"}}>{v}</td>;
+                      return<td key={c} style={{...TD,textAlign:"center",fontSize:14,fontWeight:c==="TOTAL"?900:700,color:v>0?"#b91c1c":v<0?"#6d28d9":"#94a3b8",background:v>0&&c==="TOTAL"?"rgba(185,28,28,0.1)":"transparent"}}>{v}</td>;
                     })}
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -1096,7 +1476,7 @@ function EditorView({activeRows, applyEdit, sanctionEdits, filledEdits, surplusE
               const eSanc = editing?.key===r.key&&editing?.type==="sanction";
               const eFill = editing?.key===r.key&&editing?.type==="filled";
               return(
-                <>
+                <Fragment key={r.key}>
                   {/* SANCTION ROW */}
                   <tr key={`${r.key}|s`} style={{background:ri%2===0?"#eff6ff":"#dbeafe",borderBottom:"1px solid #bfdbfe"}}>
                     <td style={{...TD,fontWeight:800,color:"#1d4ed8",fontSize:13}}>{r.circle}</td>
@@ -1202,7 +1582,7 @@ function EditorView({activeRows, applyEdit, sanctionEdits, filledEdits, surplusE
                     })}
                     <td style={{...TD,textAlign:"center",color:"#94a3b8",fontSize:11,fontWeight:600}}>auto</td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>

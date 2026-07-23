@@ -827,7 +827,7 @@ def report_excel(
         "Sanctioned": r.get("SANCTIONED"), "Base Filled": r.get("FILLED_IN"),
         "OUT": r["OUT_COUNT"], "IN": r["IN_COUNT"],
         "Active Filled": r["ACTIVE_FILLED"], "Net Vacancy": r["NET_VACANCY"],
-        "Status": "Vacant" if r["NET_VACANCY"] > 0 else "Surplus" if r["NET_VACANCY"] < 0 else "Full",
+        "Vacancy": f"{r['NET_VACANCY']} Vacant" if r["NET_VACANCY"] > 0 else f"{abs(r['NET_VACANCY'])} Surplus" if r["NET_VACANCY"] < 0 else "Full",
     } for r in rows])
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
