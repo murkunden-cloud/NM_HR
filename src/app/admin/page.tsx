@@ -261,6 +261,32 @@ export default function AdminWorkspace() {
   // Calculations states
   const [daPercentage, setDaPercentage] = useState(50);
   const [statutoryLimit, setStatutoryLimit] = useState(2000000);
+
+  // Retirement Verification States
+  const [isRetirementVerified, setIsRetirementVerified] = useState(false);
+  const [retFormDob, setRetFormDob] = useState('');
+  const [retFormDoj, setRetFormDoj] = useState('');
+  const [retFormDor, setRetFormDor] = useState('');
+  const [retFormBasic, setRetFormBasic] = useState<number>(0);
+  const [retFormDa, setRetFormDa] = useState<number>(50);
+  const [retDobConfirmed, setRetDobConfirmed] = useState(true);
+  const [retDojConfirmed, setRetDojConfirmed] = useState(true);
+  const [retDorConfirmed, setRetDorConfirmed] = useState(true);
+
+  // Synchronize retirement verification inputs when employee is selected
+  useEffect(() => {
+    if (selectedEmp) {
+      setRetFormDob(selectedEmp.brthdt || '');
+      setRetFormDoj(selectedEmp.compjoindt || '');
+      setRetFormDor(selectedEmp.dtofretir || '');
+      setRetFormBasic(selectedEmp.basic || 0);
+      setRetFormDa(daPercentage || 50);
+      setRetDobConfirmed(true);
+      setRetDojConfirmed(true);
+      setRetDorConfirmed(true);
+      setIsRetirementVerified(false); // DO NOT open retirement calculator directly!
+    }
+  }, [selectedEmp]);
   
   // Dashboard stats
   const [totalEmployees, setTotalEmployees] = useState(58417);
@@ -966,9 +992,14 @@ export default function AdminWorkspace() {
   }
 
   if (retirementPrintMode && selectedEmp) {
-    const daAmount = Math.round(selectedEmp.basic * (daPercentage / 100));
-    const totalEmoluments = selectedEmp.basic + daAmount;
-    const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(selectedEmp.compjoindt, selectedEmp.dtofretir);
+    const basicUse = retFormBasic || selectedEmp.basic;
+    const daPctUse = retFormDa !== undefined ? retFormDa : daPercentage;
+    const dojUse = retFormDoj || selectedEmp.compjoindt;
+    const dorUse = retFormDor || selectedEmp.dtofretir;
+
+    const daAmount = Math.round(basicUse * (daPctUse / 100));
+    const totalEmoluments = basicUse + daAmount;
+    const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(dojUse, dorUse);
     const calculatedGratuity = (totalEmoluments * 15 / 26) * qYears;
     const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
 
@@ -1018,14 +1049,14 @@ export default function AdminWorkspace() {
             </tr>
             <tr>
               <td><strong>Joining Date:</strong></td>
-              <td>{selectedEmp.compjoindt}</td>
+              <td>{dojUse}</td>
               <td><strong>Retirement Date:</strong></td>
-              <td>{selectedEmp.dtofretir}</td>
+              <td>{dorUse}</td>
             </tr>
             <tr>
               <td><strong>Basic Pay:</strong></td>
-              <td>₹{selectedEmp.basic.toLocaleString()}</td>
-              <td><strong>Current DA ({daPercentage}%):</strong></td>
+              <td>₹{basicUse.toLocaleString()}</td>
+              <td><strong>Current DA ({daPctUse}%):</strong></td>
               <td>₹{daAmount.toLocaleString()}</td>
             </tr>
             <tr>
@@ -2357,88 +2388,241 @@ export default function AdminWorkspace() {
                     </p>
                   </div>
 
-                  <div className="claims-controls">
-                    <div className="inputs-row">
-                      <div className="form-group">
-                        <label>Current DA Percentage (%)</label>
-                        <input
-                          type="number"
-                          value={daPercentage}
-                          onChange={(e) => setDaPercentage(parseFloat(e.target.value) || 0)}
-                        />
+                  {!isRetirementVerified ? (
+                    <div className="retirement-verification-box" style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '24px', backdropFilter: 'blur(10px)', marginTop: '16px' }}>
+                      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px', marginBottom: '20px' }}>
+                        <h3 style={{ margin: '0 0 8px 0', color: '#38bdf8', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          📋 Step 1: Pre-Calculation Service & Salary Verification
+                        </h3>
+                        <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.875rem' }}>
+                          Retirement calculation is not opened directly. Please verify and confirm whether Date of Birth, Joining Date in company, Retirement Date, Last Basic Pay, and DA Rate are correct in database before showing the calculation.
+                        </p>
                       </div>
-                      <div className="form-group">
-                        <label>Statutory Gratuity Limit (₹)</label>
-                        <input
-                          type="number"
-                          value={statutoryLimit}
-                          onChange={(e) => setStatutoryLimit(parseFloat(e.target.value) || 0)}
-                        />
-                      </div>
-                    </div>
 
-                    {/* Calculations Summary */}
-                    {(() => {
-                      const daAmount = Math.round(selectedEmp.basic * (daPercentage / 100));
-                      const totalEmoluments = selectedEmp.basic + daAmount;
-                      const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(selectedEmp.compjoindt, selectedEmp.dtofretir);
-                      const calculatedGratuity = (totalEmoluments * 15 / 26) * qYears;
-                      const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
-
-                      // LAP Encashment
-                      const inputLapDays = parseFloat(retLAPDays) || 0;
-                      const lapDays = Math.min(inputLapDays, 300);
-                      const lapAmount = (totalEmoluments * lapDays) / 30;
-
-                      // COM Encashment
-                      const inputHplDays = parseFloat(retCOMDays) || 0;
-                      // Maximum 180 days of full pay equivalent (i.e. 360 HPL days)
-                      const comDays = Math.min(inputHplDays / 2, 180);
-                      const comAmount = (totalEmoluments * comDays) / 30;
-
-                      return (
-                        <div className="claims-results-grid">
+                      <form onSubmit={(e) => { e.preventDefault(); setIsRetirementVerified(true); }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
                           
-                          <div className="claim-item-result">
-                            <h4>🏛️ Gratuity Claims</h4>
-                            <p title={qYearsText}>Qualifying Service: {qYears} Years</p>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; 15 &divide; 26) &times; {qYears} years</p>
-                            <h3>₹{finalGratuity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
-                            {calculatedGratuity > statutoryLimit && <span className="warning-note">Capped at limit of ₹{statutoryLimit.toLocaleString()}</span>}
-                          </div>
-
-                          <div className="claim-item-result">
-                            <h4>🏖️ LAP Leave Encashment</h4>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
-                              <label style={{ fontSize: '0.75rem' }}>Available LAP in Service (Days):</label>
-                              <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                          {/* Date of Birth Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              1. Date of Birth (DOB)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Value: <strong style={{ color: '#38bdf8' }}>{selectedEmp.brthdt || 'Not specified'}</strong>
                             </div>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays} capped at 300) &divide; 30</p>
-                            <h3>₹{lapAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            <input
+                              type="text"
+                              placeholder="DD.MM.YYYY or YYYY-MM-DD"
+                              value={retFormDob}
+                              onChange={(e) => setRetFormDob(e.target.value)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem', marginBottom: '8px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={retDobConfirmed}
+                                onChange={(e) => setRetDobConfirmed(e.target.checked)}
+                              />
+                              <span>Verified: Date of Birth is correct in database</span>
+                            </label>
                           </div>
 
-                          <div className="claim-item-result">
-                            <h4>🏥 COM Leave Encashment (HPL)</h4>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
-                              <label style={{ fontSize: '0.75rem' }}>Available HPL in Service (Half Pay Days):</label>
-                              <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                          {/* Company Joining Date Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              2. Company Joining Date (DOJ)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Value: <strong style={{ color: '#38bdf8' }}>{selectedEmp.compjoindt || 'Not specified'}</strong>
                             </div>
-                            <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays} equivalent full pay days) &divide; 30</p>
-                            <h3>₹{comAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            <input
+                              type="text"
+                              placeholder="DD.MM.YYYY or YYYY-MM-DD"
+                              value={retFormDoj}
+                              onChange={(e) => setRetFormDoj(e.target.value)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem', marginBottom: '8px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={retDojConfirmed}
+                                onChange={(e) => setRetDojConfirmed(e.target.checked)}
+                              />
+                              <span>Verified: Joining Date in company is correct in database</span>
+                            </label>
                           </div>
 
-                          <div className="total-package-card">
-                            <h3>Combined Settlement Package:</h3>
-                            <h2>₹{(finalGratuity + lapAmount + comAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
-                            <button className="download-docx-order-btn" onClick={() => setRetirementPrintMode(true)}>
-                              📄 Print Claim Order
-                            </button>
+                          {/* Retirement Date Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              3. Date of Retirement (DOR)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Value: <strong style={{ color: '#38bdf8' }}>{selectedEmp.dtofretir || 'Not specified'}</strong>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="DD.MM.YYYY or YYYY-MM-DD"
+                              value={retFormDor}
+                              onChange={(e) => setRetFormDor(e.target.value)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem', marginBottom: '8px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={retDorConfirmed}
+                                onChange={(e) => setRetDorConfirmed(e.target.checked)}
+                              />
+                              <span>Verified: Date of retirement is correct in database</span>
+                            </label>
+                          </div>
+
+                          {/* Last Basic Pay Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              4. Last Month Basic Pay (₹)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              DB Basic: <strong style={{ color: '#38bdf8' }}>₹{selectedEmp.basic?.toLocaleString() || '0'}</strong>
+                            </div>
+                            <input
+                              type="number"
+                              value={retFormBasic}
+                              onChange={(e) => setRetFormBasic(parseFloat(e.target.value) || 0)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem' }}
+                            />
+                          </div>
+
+                          {/* DA Rate Verification */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              5. Dearness Allowance (DA %)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              Current DA Rate: <strong style={{ color: '#38bdf8' }}>{retFormDa}%</strong>
+                            </div>
+                            <input
+                              type="number"
+                              value={retFormDa}
+                              onChange={(e) => setRetFormDa(parseFloat(e.target.value) || 0)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem' }}
+                            />
+                          </div>
+
+                          {/* Statutory Limit */}
+                          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                            <label style={{ display: 'block', fontWeight: 600, color: '#f8fafc', marginBottom: '4px', fontSize: '0.9rem' }}>
+                              6. Statutory Gratuity Limit (₹)
+                            </label>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '8px' }}>
+                              Standard Cap: <strong style={{ color: '#38bdf8' }}>₹20,00,000</strong>
+                            </div>
+                            <input
+                              type="number"
+                              value={statutoryLimit}
+                              onChange={(e) => setStatutoryLimit(parseFloat(e.target.value) || 0)}
+                              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: '#0f172a', border: '1px solid #334155', color: '#fff', fontSize: '0.9rem' }}
+                            />
                           </div>
 
                         </div>
-                      );
-                    })()}
-                  </div>
+
+                        <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          <button
+                            type="submit"
+                            style={{ padding: '12px 32px', fontSize: '1rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}
+                          >
+                            ⚡ Verify Data & Show Retirement Calculation
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="claims-controls">
+                      <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '12px 20px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+                        <div style={{ fontSize: '0.875rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span>✓ Verified Employee Parameters Active:</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DOB: {retFormDob || '-'}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DOJ: {retFormDoj || '-'}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DOR: {retFormDor || '-'}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>Basic: ₹{retFormBasic.toLocaleString()}</span>
+                          <span style={{ color: '#f8fafc', background: 'rgba(15,23,42,0.6)', padding: '2px 8px', borderRadius: '4px' }}>DA: {retFormDa}%</span>
+                        </div>
+                        <button
+                          onClick={() => setIsRetirementVerified(false)}
+                          style={{ padding: '6px 14px', background: '#334155', color: '#f8fafc', border: '1px solid #475569', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 500 }}
+                        >
+                          ✏️ Edit / Re-Verify Data
+                        </button>
+                      </div>
+
+                      {/* Calculations Summary */}
+                      {(() => {
+                        const basicUse = retFormBasic || selectedEmp.basic;
+                        const daPctUse = retFormDa !== undefined ? retFormDa : daPercentage;
+                        const dojUse = retFormDoj || selectedEmp.compjoindt;
+                        const dorUse = retFormDor || selectedEmp.dtofretir;
+
+                        const daAmount = Math.round(basicUse * (daPctUse / 100));
+                        const totalEmoluments = basicUse + daAmount;
+                        const { years: qYears, text: qYearsText } = calculateQualifyingServiceYears(dojUse, dorUse);
+                        const calculatedGratuity = (totalEmoluments * 15 / 26) * qYears;
+                        const finalGratuity = Math.min(calculatedGratuity, statutoryLimit);
+
+                        // LAP Encashment
+                        const inputLapDays = parseFloat(retLAPDays) || 0;
+                        const lapDays = Math.min(inputLapDays, 300);
+                        const lapAmount = (totalEmoluments * lapDays) / 30;
+
+                        // COM Encashment
+                        const inputHplDays = parseFloat(retCOMDays) || 0;
+                        const comDays = Math.min(inputHplDays / 2, 180);
+                        const comAmount = (totalEmoluments * comDays) / 30;
+
+                        return (
+                          <div className="claims-results-grid">
+                            
+                            <div className="claim-item-result">
+                              <h4>🏛️ Gratuity Claims</h4>
+                              <p title={qYearsText}>Qualifying Service: {qYears} Years ({qYearsText})</p>
+                              <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; 15 &divide; 26) &times; {qYears} years</p>
+                              <h3>₹{finalGratuity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                              {calculatedGratuity > statutoryLimit && <span className="warning-note">Capped at limit of ₹{statutoryLimit.toLocaleString()}</span>}
+                            </div>
+
+                            <div className="claim-item-result">
+                              <h4>🏖️ LAP Leave Encashment</h4>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
+                                <label style={{ fontSize: '0.75rem' }}>Available LAP in Service (Days):</label>
+                                <input type="number" value={retLAPDays} onChange={(e) => setRetLAPDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                              </div>
+                              <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {lapDays} capped at 300) &divide; 30</p>
+                              <h3>₹{lapAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            </div>
+
+                            <div className="claim-item-result">
+                              <h4>🏥 COM Leave Encashment (HPL)</h4>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.25rem 0' }}>
+                                <label style={{ fontSize: '0.75rem' }}>Available HPL in Service (Half Pay Days):</label>
+                                <input type="number" value={retCOMDays} onChange={(e) => setRetCOMDays(e.target.value)} style={{ width: '80px', padding: '0.2rem', fontSize: '0.75rem', background: 'rgba(15,23,42,0.6)', color: '#ffffff', border: '1px solid rgba(148,163,184,0.15)' }} />
+                              </div>
+                              <p>Formula: (₹{totalEmoluments.toLocaleString()} &times; {comDays} equivalent full pay days) &divide; 30</p>
+                              <h3>₹{comAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
+                            </div>
+
+                            <div className="total-package-card">
+                              <h3>Combined Settlement Package:</h3>
+                              <h2>₹{(finalGratuity + lapAmount + comAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
+                              <button className="download-docx-order-btn" onClick={() => setRetirementPrintMode(true)}>
+                                📄 Print Claim Order
+                              </button>
+                            </div>
+
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="select-placeholder" style={{display:'flex', flexDirection:'column', alignItems:'center', gap: '16px'}}>
